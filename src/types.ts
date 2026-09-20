@@ -47,6 +47,20 @@ export type AtlasResponse = {
   total: number;
 };
 
+export type NetworkActor = ActorSummary & {
+  /** Every resolved, visible canonical interest, with duplicate aliases merged. */
+  concepts: { conceptId: string; label: string }[];
+};
+
+export type NetworkDirectoryResponse = {
+  actors: NetworkActor[];
+  /** Actors without a visible home unit use the explicit "unassigned" area. */
+  areas: { id: string; name: string; count: number }[];
+  concepts: { id: string; label: string; count: number }[];
+  totals: { people: number; communities: number; areas: number; concepts: number; memberships: number };
+  generatedAt: string;
+};
+
 export type Reason = {
   kind: "shared_concept" | "shared_context" | "path";
   summary: string; // always present, template-generated

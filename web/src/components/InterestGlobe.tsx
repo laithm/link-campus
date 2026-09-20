@@ -392,20 +392,20 @@ export function InterestGlobe({
         >
           <defs>
             <radialGradient id={`${uid}-glass`} cx="29%" cy="23%" r="79%">
-              <stop offset="0" stopColor="#f9fffb" />
-              <stop offset="0.38" stopColor="#e0eee3" />
-              <stop offset="0.78" stopColor="#b5d4bf" />
-              <stop offset="1" stopColor="#6f9e87" />
+              <stop offset="0" stopColor="#fbfcfe" />
+              <stop offset="0.38" stopColor="#e1e8f4" />
+              <stop offset="0.78" stopColor="#b7c6e4" />
+              <stop offset="1" stopColor="#6480b0" />
             </radialGradient>
             <radialGradient id={`${uid}-shine`} cx="31%" cy="21%" r="74%">
               <stop offset="0" stopColor="white" stopOpacity="0.9" />
               <stop offset="0.42" stopColor="white" stopOpacity="0" />
-              <stop offset="0.88" stopColor="#6b9981" stopOpacity="0" />
-              <stop offset="1" stopColor="#366b50" stopOpacity="0.15" />
+              <stop offset="0.88" stopColor="#738ab4" stopOpacity="0" />
+              <stop offset="1" stopColor="#3156a3" stopOpacity="0.15" />
             </radialGradient>
             <radialGradient id={`${uid}-shadow`}>
-              <stop offset="0" stopColor="#3c7660" stopOpacity="0.14" />
-              <stop offset="1" stopColor="#3c7660" stopOpacity="0" />
+              <stop offset="0" stopColor="#30539c" stopOpacity="0.14" />
+              <stop offset="1" stopColor="#30539c" stopOpacity="0" />
             </radialGradient>
           </defs>
           <ellipse
@@ -420,7 +420,7 @@ export function InterestGlobe({
             cy={CENTER.y}
             r={RADIUS + 4}
             fill="none"
-            stroke="#bad8c6"
+            stroke="#b6c6e1"
             strokeOpacity="0.2"
           />
           <circle
@@ -428,15 +428,15 @@ export function InterestGlobe({
             cy={CENTER.y}
             r={RADIUS}
             fill={`url(#${uid}-glass)`}
-            stroke="#b4d1bf"
+            stroke="#bdc9df"
             strokeWidth="0.65"
           />
-          <g fill="none" stroke="#3e8063" strokeWidth="0.6" opacity="0.12">
+          <g fill="none" stroke="#4163a8" strokeWidth="0.6" opacity="0.12">
             {gridLines.map((points, index) => (
               <path key={index} d={gridPath(points, rotation, false)} />
             ))}
           </g>
-          <g fill="none" stroke="#568e70" strokeWidth="0.65" opacity="0.38">
+          <g fill="none" stroke="#526faf" strokeWidth="0.65" opacity="0.38">
             {gridLines.map((points, index) => (
               <path key={index} d={gridPath(points, rotation, true)} />
             ))}

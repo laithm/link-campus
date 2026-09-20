@@ -1,6 +1,7 @@
 import type {
   ActorSummary,
   AtlasResponse,
+  NetworkDirectoryResponse,
   BridgeSuggestion,
   CourseOffering,
   EventSuggestion,
@@ -86,6 +87,12 @@ const realApi = {
   // "me" is accepted as a literal path segment server-side and resolved
   // from the session — the frontend never needs to know its own actor id.
   getActor: () => get<ActorSummary>(`/actors/me`),
+
+  async getNetwork(signal?: AbortSignal): Promise<NetworkDirectoryResponse> {
+    const res = await fetch(`${BASE}/network`, { credentials: "include", signal });
+    if (!res.ok) throw new Error(await errorMessage(res, "GET /network"));
+    return res.json() as Promise<NetworkDirectoryResponse>;
+  },
 
   async getAtlas(conceptId?: string, limit = 12, signal?: AbortSignal): Promise<AtlasResponse> {
     const query = new URLSearchParams({ limit: String(limit) });
@@ -272,6 +279,14 @@ const settle = <T>(value: T, ms = 120): Promise<T> =>
 
 const fixtureApi: typeof realApi = {
   getActor: () => settle(fixtures.viewer),
+  async getNetwork(signal?: AbortSignal): Promise<NetworkDirectoryResponse> {
+    if (signal?.aborted) throw new DOMException("Network request cancelled", "AbortError");
+    // Loaded only when the database atlas is opened. This is an export of the
+    // repository's synthetic seed data, never a fallback for a failed API call.
+    const { default: snapshot } = await import("../home/network-snapshot.json");
+    if (signal?.aborted) throw new DOMException("Network request cancelled", "AbortError");
+    return snapshot as NetworkDirectoryResponse;
+  },
   async getAtlas(conceptId?: string, limit = 12, signal?: AbortSignal): Promise<AtlasResponse> {
     if (signal?.aborted) throw new DOMException("Atlas request cancelled", "AbortError");
     const interestMap = new Map(fixtureInterests

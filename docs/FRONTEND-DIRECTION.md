@@ -1,13 +1,13 @@
 # Link — campus atlas
 
-## First-view direction
+## Visual direction
 Audience: students seeking collaborators across departments. Primary job: discover a relevant person, understand why, and initiate a connection.
 
-Palette: deep ocean #174B47, lagoon #277D71, sea glass #DFF1E8, shell white #F8FAF8, ink #223B36, lilac #E9E5F5. Sora display headings; Manrope body and controls; tabular numerals for counts. Locally bundled fonts.
+Palette: paper #EEF1F5, ink #1D2940, cobalt #3156D3, signal orange #DC673E, white #FBFCFE, muted slate #75839A. Space Grotesk headings and Manrope body/controls, bundled locally. Orange is used sparingly for navigation and interest terminals. Crisp corners and clear borders replace the earlier soft green presentation.
 
-Layout: fixed quiet navigation rail → welcome and natural-language search → expansive interactive atlas beside an evidence card → useful person cards. The visual signature is an organic three-dimensional constellation: interests become neighborhoods and people become luminous nodes. Dimensional structure is concentrated in the atlas; surrounding controls remain simple and readable.
+Layout: an ink-blue navigation spine with a custom interlocking LINK mark → focused discovery with an interest sphere and a small 3D network → a separate full Database atlas. The database view's signature is a department-to-interest diagram weighted by actual profile memberships, followed by a complete directory and individual profile links. Dimensional structure stays concentrated in the discovery map. The rest uses direct labels, factual counts, and useful navigation.
 
-Alternative considered: full-screen dark science-fiction network. Rejected because campus connection needs approachability and legible human context, and the visualization should not compete with the matching evidence.
+The direction draws from campus research maps and field books. Department areas and interest links encode actual data. No decorative statistics, random data nodes, sparkles, or invented relationships.
 
 ## Hackathon narrative
 Select a shared interest → select a person in the atlas → read concept/context evidence → draft a connection request. Show the accessible list and reduced-motion controls. The 3D coordinates are illustrative; matching evidence comes from the existing API, not spatial distance.

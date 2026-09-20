@@ -16,6 +16,12 @@ Open the localhost URL printed by Vite. Keep the terminal running while you use 
 
 Search examples: `robotics`, `computer vision`, `AI`, `design`, and `cryptography`. Search matches the sample profiles' listed topics, names, and shared contexts using a fixed keyword/alias matcher. It does not run an AI model.
 
+Open **Database atlas** (`/network`) to inspect the full synthetic seed snapshot:
+316 discoverable profiles, departments, complete interest memberships, search,
+filters, and shareable profile links. Its snapshot is loaded only when this
+section opens. Connected mode reads the live authenticated directory instead.
+See [directory API and snapshot notes](../docs/NETWORK.md).
+
 Interest settings, visibility preferences, and preview connection requests are saved in this browser's local storage. A preview request never sends a message to anyone. Requests stay pending because there is no other participant in the standalone preview. Clearing the site's browser storage resets these changes.
 
 The people, communities, events, bridge suggestions, and completed imports in preview mode are sample data. Import processing, shared workspaces, live chat, collaborative editing, and AI summaries require the backend. These actions show an explanation in the preview instead of attempting an unavailable service. Added interests stay unresolved without the backend's concept resolution process.

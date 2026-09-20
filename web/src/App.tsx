@@ -1,5 +1,11 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Home } from "./pages/Home";
@@ -8,10 +14,14 @@ import { View } from "./pages/View";
 import { Search } from "./pages/Search";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
+import { returnPath } from "./auth/returnPath";
 
 // Editor + tree libraries are heavy; only load them when the page is opened.
 const Collaborations = lazy(() =>
   import("./pages/Collaborations").then((m) => ({ default: m.Collaborations })),
+);
+const DatabaseAtlas = lazy(() =>
+  import("./pages/DatabaseAtlas").then((m) => ({ default: m.DatabaseAtlas })),
 );
 
 // Any unauthenticated route redirects to /login; render nothing until
@@ -19,15 +29,24 @@ const Collaborations = lazy(() =>
 // already-authenticated user (auth handoff, "Route guard").
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { actor, loading } = useAuth();
+  const location = useLocation();
   if (loading) return null;
-  if (!actor) return <Navigate to="/login" replace />;
+  if (!actor)
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location.pathname + location.search + location.hash }}
+        replace
+      />
+    );
   return <>{children}</>;
 }
 
 function LoginRoute() {
   const { actor, loading } = useAuth();
+  const location = useLocation();
   if (loading) return null;
-  if (actor) return <Navigate to="/" replace />;
+  if (actor) return <Navigate to={returnPath(location.state)} replace />;
   return <Login />;
 }
 
@@ -48,6 +67,20 @@ export function App() {
             <Route path="/import" element={<Import />} />
             <Route path="/view" element={<View />} />
             <Route path="/search" element={<Search />} />
+            <Route
+              path="/network"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="empty-state" role="status">
+                      Opening the database atlas…
+                    </div>
+                  }
+                >
+                  <DatabaseAtlas />
+                </Suspense>
+              }
+            />
             <Route
               path="/collaborations"
               element={

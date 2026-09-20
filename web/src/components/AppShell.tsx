@@ -10,14 +10,13 @@ import {
   ArrowUpRight,
   ChevronDown,
   Compass,
+  Database,
   Layers3,
   LogOut,
   Menu,
-  Network,
   Plus,
   Search,
   Settings2,
-  Sparkles,
   Users,
   X,
 } from "lucide-react";
@@ -28,6 +27,7 @@ import { Avatar } from "./Avatar";
 
 const NAV = [
   { to: "/", label: "Discover", icon: Compass },
+  { to: "/network", label: "Database atlas", icon: Database },
   { to: "/search", label: "Find people", icon: Search },
   { to: "/view", label: "Your connections", icon: Users },
   { to: "/collaborations", label: "Collaborations", icon: Layers3 },
@@ -71,10 +71,27 @@ function Shell() {
           onClick={() => setMenu(false)}
           aria-label="Link home"
         >
-          <span className="brand-mark">
-            <Network size={24} strokeWidth={1.8} />
-          </span>
-          link<span className="brand-period">.</span>
+          <svg
+            className="link-brand-symbol"
+            viewBox="0 0 40 40"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M25 8H8v18h17V15"
+              stroke="currentColor"
+              strokeWidth="3.4"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M15 32h17V14H15v11"
+              stroke="currentColor"
+              strokeWidth="3.4"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="link-wordmark">LINK</span>
+          <span className="link-registration" aria-hidden="true" />
         </Link>
         <button
           className="mobile-close icon-button"
@@ -84,16 +101,17 @@ function Shell() {
           <X size={20} />
         </button>
         <div className="campus-switch">
-          <span className="campus-symbol">⌘</span>
+          <span className="campus-symbol">
+            <Compass size={19} strokeWidth={1.5} />
+          </span>
           <div>
-            <strong>Your campus</strong>
+            <strong>Campus directory</strong>
             <span>
-              {USING_FIXTURES ? "Demo community" : "Community network"}
+              {USING_FIXTURES ? "Sample profiles" : "Connected profiles"}
             </span>
           </div>
-          <span className="status-dot" />
         </div>
-        <div className="nav-label">WORKSPACE</div>
+        <div className="nav-label">Explore</div>
         <nav className="side-nav" aria-label="Main navigation">
           {NAV.map(({ to, label, icon: Icon }) => (
             <NavLink
@@ -110,12 +128,11 @@ function Shell() {
               {to === "/collaborations" && unreadTotal + inviteCount > 0 && (
                 <small>{unreadTotal + inviteCount}</small>
               )}
-              {to === "/" && <span className="nav-active-dot" />}
             </NavLink>
           ))}
         </nav>
         <div className="nav-label interests-label">
-          YOUR INTERESTS
+          Your interests
           <Link to="/settings" aria-label="Manage interests">
             <Plus size={16} />
           </Link>
@@ -133,19 +150,15 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="curiosity-card">
-            <span className="curiosity-icon">
-              <Sparkles size={21} />
-            </span>
-            <h3>More you. Better links.</h3>
-            <p>
-              A project, a passion, a rabbit hole. Let your interests do the
-              connecting.
-            </p>
-            <Link to="/import" onClick={() => setMenu(false)}>
-              Build your profile <ArrowUpRight size={16} />
-            </Link>
-          </div>
+          <Link
+            className="sidebar-atlas-entry"
+            to="/network"
+            onClick={() => setMenu(false)}
+          >
+            <span>Explore the whole campus</span>
+            <ArrowUpRight size={16} aria-hidden="true" />
+            <small>People, interests, and the connections between them.</small>
+          </Link>
           <NavLink
             to="/settings"
             onClick={() => setMenu(false)}
@@ -159,7 +172,7 @@ function Shell() {
               <Avatar name={actor?.displayName ?? "You"} size="sm" />
               <div>
                 <strong>{actor?.displayName ?? "Your profile"}</strong>
-                <span>My personal space</span>
+                <span>Your profile</span>
               </div>
             </Link>
             <button
@@ -186,14 +199,13 @@ function Shell() {
             >
               <Menu size={21} />
             </button>
-            <span className="breadcrumb-root">Your workspace</span>
+            <span className="breadcrumb-root">Campus</span>
             <span className="breadcrumb-slash">/</span>
             <strong>{title}</strong>
           </div>
           <div className="topbar-right">
             <span className="demo-badge">
-              <span className="status-dot" />
-              {USING_FIXTURES ? "Demo campus" : "Campus network"}
+              {USING_FIXTURES ? "Sample campus" : "Connected to campus"}
             </span>
             <span className="topbar-divider" />
             <Link

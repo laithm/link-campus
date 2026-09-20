@@ -1,10 +1,12 @@
 # Link — your campus, connected
 
-**[Open the live demo](https://link-campus.vercel.app/)** · [GitHub repository](https://github.com/laithm/link-campus)
+**[Open the database atlas](https://link-campus.vercel.app/network)** · [Discovery](https://link-campus.vercel.app/) · [Public GitHub repository](https://github.com/laithm/link-campus)
 
 A campus discovery app that connects people through shared interests and explains why each match matters. Turn the labelled interest sphere to filter a focused Three.js network: at most 12 matching people, with nearby names visible and distant labels fading away. The responsive workspace also includes searchable connections, locally saved profiles, and a complete preview introduction flow.
 
 Based on [Prashant-koi/link](https://github.com/Prashant-koi/link). The original backend is retained, with a new authenticated atlas endpoint that filters and ranks people from complete interest memberships.
+
+The **Database atlas** makes the complete visible database explorable: department-to-interest links, area sections, search, people/community filters, and a direct link for every profile. Connected mode reads the authenticated `/api/network` endpoint. The shared preview loads a synthetic seed snapshot containing 316 discoverable profiles and 706 interests. Its blue-grey paper, ink-blue navigation, cobalt controls, and custom LINK mark give the app the character of a campus research atlas.
 
 ## Run the local frontend preview
 
@@ -42,6 +44,8 @@ npm run preview -- --host 127.0.0.1
 For the connected backend, use `npm run dev` or `npm run build` instead. Vite proxies `/api` and `/collab` to `http://localhost:3001` unless `API_PROXY_TARGET` is configured. The root backend requires its database/model configuration; see the source environment example and Docker Compose files. [Local backend setup and atlas API](docs/BACKEND-ATLAS.md) documents the running PostgreSQL-backed preview on port 5174 and its seeded login. The shareable Vercel link uses sample data; it cannot access a backend running on your computer.
 
 More detail: [frontend README](web/README.md), [design and hackathon direction](docs/FRONTEND-DIRECTION.md), [preview verification](docs/PREVIEW-QA.md).
+
+The [directory API and snapshot documentation](docs/NETWORK.md) explains visibility, complete membership data, aggregate counts, and regenerating the shareable seed preview.
 
 ## Hand-off
 

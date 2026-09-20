@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { returnPath } from "../auth/returnPath";
 
 // Route /login. Single centred card, nothing else on the page — no nav bar,
 // since there is nowhere to navigate to yet (frontend/auth handoff).
 export function Login() {
   const { login, authMode } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +21,7 @@ export function Login() {
     const result = await login(username, password);
     setSubmitting(false);
     if (result.ok) {
-      navigate("/", { replace: true });
+      navigate(returnPath(location.state), { replace: true });
     } else {
       setError(result.error);
     }
@@ -38,11 +40,15 @@ export function Login() {
           gap: 20,
         }}
       >
-        <h1 style={{ fontSize: "var(--fs-xl)", color: "var(--ink-900)" }}>Link</h1>
+        <h1 style={{ fontSize: "var(--fs-xl)", color: "var(--ink-900)" }}>
+          Link
+        </h1>
 
         <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--ink-500)" }}>Username</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--ink-500)" }}>
+              Username
+            </span>
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -58,7 +64,9 @@ export function Login() {
             />
           </label>
           <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: "var(--fs-sm)", color: "var(--ink-500)" }}>Password</span>
+            <span style={{ fontSize: "var(--fs-sm)", color: "var(--ink-500)" }}>
+              Password
+            </span>
             <input
               type="password"
               value={password}
@@ -119,7 +127,8 @@ export function Login() {
               margin: 0,
             }}
           >
-            Demo build: passwords are derived from names and are public. Not for real accounts.
+            Demo build: passwords are derived from names and are public. Not for
+            real accounts.
           </p>
         )}
       </div>

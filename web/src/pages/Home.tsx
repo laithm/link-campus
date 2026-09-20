@@ -17,7 +17,7 @@ import {
   Play,
   Plus,
   Search,
-  Sparkles,
+  Link2,
   Users,
   X,
 } from "lucide-react";
@@ -43,7 +43,7 @@ const InterestGlobe = lazy(() =>
   })),
 );
 const ATLAS_LIMIT = 12;
-const INTEREST_COLORS = ["#168f8d", "#a394c7", "#bd9651", "#73a1b6", "#829977"];
+const INTEREST_COLORS = ["#3156d3", "#8c6cac", "#dc673e", "#4f8d9a", "#8585a7"];
 
 export function Home() {
   const navigate = useNavigate();
@@ -266,31 +266,21 @@ export function Home() {
     <div className="discover-page">
       <section className="welcome-section">
         <div>
-          <div className="eyebrow">
-            <span className="tiny-spark">✳</span> A WORLD OF PEOPLE, A LITTLE
-            CLOSER
-          </div>
+          <div className="eyebrow">PEOPLE / IDEAS / COMMON GROUND</div>
           <h1>
-            Your next great idea
+            Same campus.
             <br />
-            starts with <span>a connection.</span>
+            <span>Different circles.</span>
           </h1>
-          <p>
-            Find your people. Share your curiosity. Build something together.
-          </p>
+          <p>Find people by what they study, work on, and want to build.</p>
         </div>
-        <div className="welcome-note">
-          <div className="mini-orbit" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <span>
-            Different minds.
-            <br />
-            <strong>Shared possibilities.</strong>
-          </span>
-        </div>
+        <Link to="/network" className="campus-index-link">
+          <span>ZOOM OUT</span>
+          <strong>
+            The whole campus <ArrowUpRight size={21} />
+          </strong>
+          <small>People, departments & interests</small>
+        </Link>
       </section>
       <form
         className="discovery-search"
@@ -303,16 +293,16 @@ export function Home() {
         <Search size={21} strokeWidth={1.7} />
         <input
           aria-label="What are you curious about?"
-          placeholder="What are you curious about? Find people, interests, or ideas…"
+          placeholder="Search a name, research interest, or department"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <button type="submit" className="search-submit">
-          Find my people <ArrowRight size={16} />
+          Find people <ArrowRight size={16} />
         </button>
       </form>
       <div className="suggested-searches">
-        <span>A little inspiration:</span>
+        <span>Try a topic</span>
         {["Machine learning", "Robotics", "Computer vision"].map((q) => (
           <button
             key={q}
@@ -326,11 +316,11 @@ export function Home() {
       <section className="network-section" aria-labelledby="network-title">
         <div className="section-heading">
           <div className="section-title">
-            <h2 id="network-title">Your world of connections</h2>
+            <h2 id="network-title">Your interest map</h2>
             <span className="count-badge">{atlas?.total ?? 0}</span>
           </div>
-          <Link to="/view" className="text-link">
-            Explore all <ArrowUpRight size={15} />
+          <Link to="/network" className="text-link">
+            Open database atlas <ArrowUpRight size={15} />
           </Link>
         </div>
         <div
@@ -391,7 +381,7 @@ export function Home() {
           <div className="network-loading">
             <span className="loading-orbit" />
             <h3>Finding your connections</h3>
-            <p>A few shared interests can open a whole new world.</p>
+            <p>Matching your interests with the campus network.</p>
           </div>
         ) : error && !atlas ? (
           <div className="empty-state">
@@ -626,8 +616,8 @@ export function Home() {
               {selected && !busy && !viewError ? (
                 <>
                   <div className="spotlight-eyebrow">
-                    <Sparkles size={14} />
-                    <span>A CONNECTION WORTH EXPLORING</span>
+                    <Link2 size={14} />
+                    <span>SELECTED PROFILE</span>
                   </div>
                   <div className="spotlight-profile">
                     <div className="spotlight-avatar-wrap">
@@ -638,9 +628,6 @@ export function Home() {
                           (p) => p.actor.id === selected.actor.id,
                         )}
                       />
-                      <span className="profile-spark">
-                        <Sparkles size={12} />
-                      </span>
                     </div>
                     <h3>{selected.actor.displayName}</h3>
                     <p>
@@ -656,7 +643,7 @@ export function Home() {
                       : "Shared campus context"}
                   </div>
                   <div className="why-connect">
-                    <h4>Why you two?</h4>
+                    <h4>Shared ground</h4>
                     <p>
                       {selected.reasons[0]?.prose ??
                         selected.reasons[0]?.summary ??
@@ -682,7 +669,7 @@ export function Home() {
                     <ArrowUpRight size={17} />
                   </button>
                   <span className="spotlight-footnote">
-                    Good conversations start with common ground.
+                    Based on visible profile interests.
                   </span>
                 </>
               ) : (
@@ -744,12 +731,12 @@ export function Home() {
               <h2 id="people-title">
                 {audience === "societies"
                   ? "Find a community for your curiosity"
-                  : "A few people you should meet"}
+                  : "Start a conversation"}
               </h2>
               <p>
                 {audience === "people" && activeInterest
                   ? `People who share your interest in ${activeInterest.label}.`
-                  : "Shared interests. Fresh perspectives. Something worth starting."}
+                  : "The closest matches from your interest map."}
               </p>
             </div>
             <button
@@ -835,7 +822,7 @@ export function Home() {
       )}
       <footer className="discover-footer">
         <span>
-          <Network size={15} /> Small connections. Big possibilities.
+          <Network size={15} /> Link / Campus discovery
         </span>
         <Link to="/settings">
           Made around your interests <ChevronRight size={13} />

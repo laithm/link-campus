@@ -1,5 +1,35 @@
 # Local preview verification
 
+## Complete directory and visual identity
+
+The Database atlas (`/network`) was verified in standalone preview mode and
+against the real local API/PostgreSQL stack:
+
+- All 316 discoverable profiles appeared exactly once across 14 directory pages.
+  Backend totals were 291 people, 25 communities, 9 area buckets, 706 interests,
+  and 2,251 distinct actor-interest memberships.
+- Selecting Computer Science and fibre technology produced exactly the 16
+  profiles found by filtering the complete API response. The diagram's counts
+  update with the selection. People/community filters and empty-search/reset
+  states work.
+- Shared profile URLs survive an unauthenticated visit and login. A direct
+  Aditya Lindqvist link opened the correct profile with all nine API interests.
+- Profile drawers expose related profiles, preserve filters, close with Escape,
+  restore document scrolling, and provide a selectable link when clipboard
+  access is unavailable.
+- Desktop 1440px and mobile 390px layouts were visually inspected. The 320px
+  directory switches to one column without horizontal overflow. Mobile chart
+  labels and metadata were enlarged after inspection.
+- Home, Search, and Settings use the updated ink-blue/cobalt identity without
+  horizontal overflow. Both desktop and mobile sphere controls still filter
+  the person map. Sidebar overflow on shorter screens was corrected.
+- Backend directory/atlas/privacy regression tests and the connected frontend
+  production build pass. Browser checks reported no uncaught errors.
+
+The public directory preview is an explicit export of synthetic seed profiles;
+it is separate from the authenticated live API. Public snapshot contact methods
+are omitted. See [directory data semantics](NETWORK.md).
+
 ## Interest sphere and connected atlas update
 
 Verified against the real local API on port 3001 and the isolated PostgreSQL +

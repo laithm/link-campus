@@ -12,6 +12,7 @@ import { conceptsRouter } from "./routes/concepts.js";
 import { importsRouter } from "./routes/imports.js";
 import { introsRouter } from "./routes/intros.js";
 import { meRouter } from "./routes/me.js";
+import { networkRouter } from "./routes/network.js";
 import { workspacesRouter } from "./routes/workspaces.js";
 import { searchRouter } from "./routes/search.js";
 
@@ -54,6 +55,7 @@ export function createServer() {
   api.use(aiRouter);
   api.use(aiProfileRouter);
   api.use(meRouter);
+  api.use(networkRouter);
   api.use(searchRouter);
   app.use("/api", api);
 

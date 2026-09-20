@@ -41,7 +41,7 @@ type PersonPoint = {
 type SharedEdge = { a: number; b: number; strength: number };
 type LabelMap = Map<string, HTMLButtonElement>;
 
-const GROUP_COLORS = ["#168f8d", "#a394c7", "#bd9651", "#73a1b6", "#829977"];
+const GROUP_COLORS = ["#3156d3", "#8c6cac", "#dc673e", "#4f8d9a", "#8585a7"];
 // Rank determines position: the strongest match starts at the top/front.
 const PERSON_POSITIONS: [number, number, number][] = [
   [-0.28, 1.36, 1.14],
@@ -361,8 +361,8 @@ function StaticAtlas({
         <defs>
           <radialGradient id={gradientId} cx="28%" cy="22%" r="80%">
             <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="42%" stopColor="#e0f0e9" />
-            <stop offset="100%" stopColor="#83b8ad" />
+            <stop offset="42%" stopColor="#e4eaf6" />
+            <stop offset="100%" stopColor="#8da3ca" />
           </radialGradient>
         </defs>
         {edges.map(({ a, b }) => (
@@ -372,7 +372,7 @@ function StaticAtlas({
             y1={points[a].y}
             x2={points[b].x}
             y2={points[b].y}
-            stroke="#79a99b"
+            stroke="#8b9ebe"
             strokeWidth="0.85"
             opacity={
               0.12 + Math.min(points[a].opacity, points[b].opacity) * 0.23
@@ -394,7 +394,7 @@ function StaticAtlas({
                   cy={point.y}
                   r={point.radius + 6}
                   fill="none"
-                  stroke="#168f87"
+                  stroke="#3156d3"
                   opacity="0.3"
                 />
               )}
@@ -403,7 +403,7 @@ function StaticAtlas({
                 cy={point.y}
                 r={point.radius}
                 fill={
-                  selectedId === point.id ? "#329e90" : `url(#${gradientId})`
+                  selectedId === point.id ? "#3156d3" : `url(#${gradientId})`
                 }
                 stroke="#ffffff"
                 strokeWidth="1"
@@ -487,11 +487,11 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
     controls.touches.ONE = THREE.TOUCH.ROTATE;
     controls.touches.TWO = THREE.TOUCH.ROTATE;
 
-    scene.add(new THREE.AmbientLight(0xe4fff3, 1.8));
+    scene.add(new THREE.AmbientLight(0xe7edff, 1.8));
     const keyLight = new THREE.DirectionalLight(0xffffff, 4.5);
     keyLight.position.set(-4, 5, 6);
     scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0x60aa98, 2.2);
+    const rimLight = new THREE.DirectionalLight(0x7895ce, 2.2);
     rimLight.position.set(5, -2, -3);
     scene.add(rimLight);
 
@@ -503,10 +503,10 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
     resources.push(sphereGeometry, ringGeometry);
     const personMeshes = latestRef.current.people.map((person, index) => {
       const material = new THREE.MeshPhysicalMaterial({
-        color: "#d6e8df",
-        roughness: 0.21,
+        color: "#d1dcef",
+        roughness: 0.45,
         metalness: 0.08,
-        clearcoat: 1,
+        clearcoat: 0.35,
         clearcoatRoughness: 0.14,
         transparent: true,
       });
@@ -517,7 +517,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       mesh.userData.personId = person.id;
       network.add(mesh);
       const ringMaterial = new THREE.MeshBasicMaterial({
-        color: "#178e80",
+        color: "#3156d3",
         transparent: true,
         opacity: 0.35,
         depthWrite: false,
@@ -538,7 +538,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
           personMeshes[b].mesh.position,
         ]);
         const material = new THREE.LineBasicMaterial({
-          color: "#79a99b",
+          color: "#8b9ebe",
           transparent: true,
           opacity: 0.26,
           depthWrite: false,
@@ -572,7 +572,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
             radius,
             subdued,
           );
-          material.color.set(selected ? "#228f81" : "#d6e8df");
+          material.color.set(selected ? "#3156d3" : "#d1dcef");
           material.opacity = 0.18 + point.opacity * 0.82;
           mesh.scale.setScalar(radius);
           ring.visible = selected;
@@ -591,7 +591,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
           (selected ? 0.19 : 0.1) +
           Math.min(points[a].opacity, points[b].opacity) *
             Math.min(0.28, 0.15 + strength * 0.025);
-        material.color.set(selected ? "#3e9e89" : "#79a99b");
+        material.color.set(selected ? "#3156d3" : "#8b9ebe");
       });
       positionLabels(points, labelsRef.current, width, height);
       renderer.render(scene, camera);
