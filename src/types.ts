@@ -61,6 +61,30 @@ export type NetworkDirectoryResponse = {
   generatedAt: string;
 };
 
+export type BackendGraphNode = {
+  id: string;
+  entityId: string;
+  kind: ActorSummary["kind"] | "concept" | "context";
+  label: string;
+  subtype?: string;
+  /** Namespaced actor ID of a visible home unit, when one exists. */
+  areaId?: string;
+};
+
+export type BackendGraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  label: string;
+};
+
+export type BackendGraphResponse = {
+  nodes: BackendGraphNode[];
+  edges: BackendGraphEdge[];
+  generatedAt: string;
+};
+
 export type Reason = {
   kind: "shared_concept" | "shared_context" | "path";
   summary: string; // always present, template-generated

@@ -1,5 +1,62 @@
 # Local preview verification
 
+## Backend graph and Home evidence interface
+
+Verified in Chromium against both the standalone preview on port 5173 and the
+connected frontend on port 5174:
+
+- Settings links to `/settings/backend`; an unauthenticated deep link returns
+  to this page after login. The graph displays all 1,083 nodes and 5,130 edges.
+- Hovering an actual canvas node displays its name and type. Clicking selects
+  that exact database node, updates its shareable URL and highlights its edges.
+  Orbiting preserves selection; reset restores the full view.
+- Search finds people, clubs, interests and activities. Cybersecurity Club's
+  31 neighboring records match the API exactly; isolating it shows 32 nodes.
+  Research Showcase 2025 shows its six connected records.
+- Type filters remove their nodes and incident edges. A filtered selection
+  offers a recovery action; an invalid node link reports it is unavailable.
+- Desktop 1440px, mobile 390px and narrow 320px layouts have no horizontal
+  overflow. The 3D canvas, search and connection notes remain accessible.
+- Home shows a central You node with up to three labeled evidence nodes
+  (two on mobile). Every evidence-to-person path was checked against the exact
+  shared concept IDs or context evidence returned by the API, in both modes.
+- Connected Nina's view shows 12 of 173 matches. Turning the sphere to
+  Information quality changes this to 12 of 54 matches; every rendered person
+  shares that interest. Selecting a profile updates the evidence labels.
+- Home's simulated WebGL-loss SVG fallback preserves person selection and
+  evidence nodes. Desktop/mobile screenshots show readable labels without
+  collisions. No uncaught browser errors were reported in either mode.
+- The backend graph also survives simulated WebGL loss: its list fallback
+  exposes selectable nodes, and choosing Noor Moreau updates the URL and
+  connection notes to that exact profile.
+
+Backend typechecking, frontend production build, and all five atlas, directory,
+graph, privacy and sample-export regression tests pass.
+
+## Backend graph API and sample export
+
+Verified against the real local API on port 3001 and PostgreSQL on port 55432:
+
+- `GET /api/network/graph` returns 401 without a session and 200 after seeded
+  cookie-session login. Successful responses use `private, no-store` caching.
+- The seed graph contains 1,083 nodes: 291 people, 25 communities, 706 interests,
+  and 61 activities. Its 5,130 edges comprise 2,251 interest memberships, 291
+  home-unit links, 1,248 actor/activity relations, and 1,340 concept relations.
+- Every edge endpoint refers to a returned node. Actor, concept, and context
+  namespaces remain distinct even when underlying UUIDs are identical.
+- The database regression covers real course/club relationships, historical
+  labels, complete concept memberships, duplicate aliases, hidden actors and
+  home units, private interests/edges, and dangling endpoints. Contacts, raw
+  interest strings, definitions, and evidence are absent from the graph payload.
+- The separate sample exporter validates all node labels/IDs and all
+  relationship identities/endpoints against the checked-in synthetic seed.
+  Added or changed records and unexpected contact/evidence fields are rejected.
+- Both new regressions, backend typechecking, and diff checks pass. Database
+  test records are rolled back; the sample export contains only validated seed
+  records.
+
+See [graph contract, export, and test commands](BACKEND-GRAPH.md).
+
 ## Complete directory and visual identity
 
 The Database atlas (`/network`) was verified in standalone preview mode and

@@ -51,7 +51,11 @@ function Shell() {
   const fullBleed = pathname.startsWith("/collaborations");
   const title =
     NAV.find((n) => n.to === pathname)?.label ??
-    (pathname === "/import" ? "Build your profile" : "Your settings");
+    (pathname === "/import"
+      ? "Build your profile"
+      : pathname === "/settings/backend"
+        ? "Visualise backend"
+        : "Your settings");
   return (
     <div className="app-layout">
       <a href="#main-content" className="skip-link">

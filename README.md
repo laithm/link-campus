@@ -1,12 +1,14 @@
 # Link — your campus, connected
 
-**[Open the database atlas](https://link-campus.vercel.app/network)** · [Discovery](https://link-campus.vercel.app/) · [Public GitHub repository](https://github.com/laithm/link-campus)
+**[Visualise the backend](https://link-campus.vercel.app/settings/backend)** · [Database atlas](https://link-campus.vercel.app/network) · [Discovery](https://link-campus.vercel.app/) · [Public GitHub repository](https://github.com/laithm/link-campus)
 
 A campus discovery app that connects people through shared interests and explains why each match matters. Turn the labelled interest sphere to filter a focused Three.js network: at most 12 matching people, with nearby names visible and distant labels fading away. The responsive workspace also includes searchable connections, locally saved profiles, and a complete preview introduction flow.
 
 Based on [Prashant-koi/link](https://github.com/Prashant-koi/link). The original backend is retained, with a new authenticated atlas endpoint that filters and ranks people from complete interest memberships.
 
 The **Database atlas** makes the complete visible database explorable: department-to-interest links, area sections, search, people/community filters, and a direct link for every profile. Connected mode reads the authenticated `/api/network` endpoint. The shared preview loads a synthetic seed snapshot containing 316 discoverable profiles and 706 interests. Its blue-grey paper, ink-blue navigation, cobalt controls, and custom LINK mark give the app the character of a campus research atlas.
+
+**Settings → Visualise backend** opens a separate 3D map of the stored graph: larger people and group nodes, smaller interests and activities, and actual database relationships. Search for a node, follow its connections, isolate its neighborhood, filter by area or node type, and open its profile. Connected mode reads `/api/network/graph`; the standalone sample contains 1,083 validated synthetic nodes and 5,130 relationships. [Graph data and export documentation](docs/BACKEND-GRAPH.md)
 
 ## Run the local frontend preview
 
@@ -24,11 +26,12 @@ The preview uses the repository's sample campus data and does not require Postgr
 
 ## Try the demo
 
-1. Turn the interest sphere on the left, click a label, or use its arrows.
-2. Watch the network and top profiles update together; drag the network to bring distant names forward.
-3. Read the evidence in **Why you two connect**.
-4. Save a profile or write a local demo connection request.
-5. Open **Collaborations** to see your saved request.
+1. Open **Settings → Visualise backend** and drag to orbit the 3D graph; scroll to zoom.
+2. Search for a person, club, or topic. Select a node to inspect its stored relationships, then use **Isolate connections** or the area/type filters.
+3. Follow a connected node, copy its link, or open an actor's profile in the Database atlas.
+4. Return to **Discovery** and turn the interest sphere to update the matching people and top profiles together.
+5. Read **Why you two connect**, save a profile, or write a local demo connection request.
+6. Open **Collaborations** to see your saved request.
 
 The atlas includes a no-WebGL fallback, reduced-motion support, zoom, and an expanded view. Graph positions are illustrative; the evidence panel gives the actual matching reasons.
 

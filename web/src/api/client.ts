@@ -1,6 +1,7 @@
 import type {
   ActorSummary,
   AtlasResponse,
+  BackendGraphResponse,
   NetworkDirectoryResponse,
   BridgeSuggestion,
   CourseOffering,
@@ -92,6 +93,12 @@ const realApi = {
     const res = await fetch(`${BASE}/network`, { credentials: "include", signal });
     if (!res.ok) throw new Error(await errorMessage(res, "GET /network"));
     return res.json() as Promise<NetworkDirectoryResponse>;
+  },
+
+  async getBackendGraph(signal?: AbortSignal): Promise<BackendGraphResponse> {
+    const res = await fetch(`${BASE}/network/graph`, { credentials: "include", signal });
+    if (!res.ok) throw new Error(await errorMessage(res, "GET /network/graph"));
+    return res.json() as Promise<BackendGraphResponse>;
   },
 
   async getAtlas(conceptId?: string, limit = 12, signal?: AbortSignal): Promise<AtlasResponse> {
@@ -279,6 +286,12 @@ const settle = <T>(value: T, ms = 120): Promise<T> =>
 
 const fixtureApi: typeof realApi = {
   getActor: () => settle(fixtures.viewer),
+  async getBackendGraph(signal?: AbortSignal): Promise<BackendGraphResponse> {
+    if (signal?.aborted) throw new DOMException("Graph request cancelled", "AbortError");
+    const { default: snapshot } = await import("../home/backend-snapshot.json");
+    if (signal?.aborted) throw new DOMException("Graph request cancelled", "AbortError");
+    return snapshot as BackendGraphResponse;
+  },
   async getNetwork(signal?: AbortSignal): Promise<NetworkDirectoryResponse> {
     if (signal?.aborted) throw new DOMException("Network request cancelled", "AbortError");
     // Loaded only when the database atlas is opened. This is an export of the

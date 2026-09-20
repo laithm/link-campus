@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { Eye, Fingerprint, Leaf, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  Eye,
+  Fingerprint,
+  Leaf,
+  Network,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { Link } from "react-router-dom";
 import { api, USING_FIXTURES } from "../api/client";
 import { Avatar } from "../components/Avatar";
 import { InterestEditor } from "../components/InterestEditor";
@@ -66,6 +75,20 @@ export function Settings() {
       <p className="settings-intro">
         The best connections start with the things that make you, you.
       </p>
+      <Link className="settings-backend-link" to="/settings/backend">
+        <span className="settings-backend-icon">
+          <Network size={28} strokeWidth={1.4} />
+        </span>
+        <span>
+          <small>HACKATHON TOOLS</small>
+          <strong>Visualise backend</strong>
+          <span>
+            Explore the people, clubs, activities and interests behind every
+            connection.
+          </span>
+        </span>
+        <ArrowUpRight size={22} aria-hidden="true" />
+      </Link>
       {error && (
         <div className="settings-error" role="alert">
           {error}

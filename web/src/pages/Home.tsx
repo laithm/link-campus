@@ -211,6 +211,17 @@ export function Home() {
         const groups = interests.flatMap((c, i) =>
           sharedConceptIds.includes(c.conceptId) ? [i] : [],
         );
+        const sharedEvidence = [
+          ...sharedConceptIds.flatMap((id) => {
+            const concept = interests.find((item) => item.conceptId === id);
+            return concept ? [{ id, label: concept.label, kind: "interest" as const }] : [];
+          }),
+          ...s.reasons.flatMap((reason) => reason.kind === "shared_context"
+            ? reason.evidence.filter((item) => item.kind === "context" && item.label.trim()
+              && !/^(shared\s+)?context$|^unknown$/i.test(item.label.trim()))
+              .map((item) => ({ id: item.id, label: item.label, kind: "context" as const }))
+            : []),
+        ];
         return {
           id: s.actor.id,
           name: s.actor.displayName,
@@ -218,6 +229,7 @@ export function Home() {
           groups,
           group: groups[0] ?? 0,
           sharedConceptIds,
+          sharedEvidence,
           score: s.score,
         };
       }),
@@ -462,10 +474,10 @@ export function Home() {
                   <p>
                     {audience === "people" &&
                       "Turn the sphere on the left to choose an interest. "}
-                    Each node is one returned profile, with at most 12 shown.
-                    Lines join profiles with a shared interest. Drag the network
-                    to bring nearby names into focus; position is illustrative,
-                    while the matching evidence comes from their profiles.
+                    You sit at the centre. Smaller orange nodes name the interests
+                    and shared contexts that connect you to each profile. Up to
+                    three explanations are shown, prioritising the selected
+                    profile. Drag to bring nearby names into focus.
                   </p>
                 </div>
               )}
@@ -553,15 +565,14 @@ export function Home() {
                     )}
                   </div>
                   <p className="atlas-depth-note">
-                    Closer names come into focus. Drag to see who’s behind.
+                    You → shared ground → a person. Drag to bring names into focus.
                   </p>
                 </div>
               </div>
               <div className="atlas-footer">
                 <span>
-                  <span className="drag-icon">⌘</span> Each node is a{" "}
-                  {audience === "societies" ? "community" : "person"} · Lines
-                  are shared interests
+                  <span className="atlas-evidence-key" aria-hidden="true" />
+                  Small nodes explain your connections
                 </span>
                 <div className="atlas-controls">
                   <button

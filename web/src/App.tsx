@@ -23,6 +23,11 @@ const Collaborations = lazy(() =>
 const DatabaseAtlas = lazy(() =>
   import("./pages/DatabaseAtlas").then((m) => ({ default: m.DatabaseAtlas })),
 );
+const BackendVisualization = lazy(() =>
+  import("./pages/BackendVisualization").then((m) => ({
+    default: m.BackendVisualization,
+  })),
+);
 
 // Any unauthenticated route redirects to /login; render nothing until
 // GET /auth/me resolves, to avoid a flash of the login form for an
@@ -90,6 +95,20 @@ export function App() {
               }
             />
             <Route path="/settings" element={<Settings />} />
+            <Route
+              path="/settings/backend"
+              element={
+                <Suspense
+                  fallback={
+                    <div className="empty-state" role="status">
+                      Opening the backend graph…
+                    </div>
+                  }
+                >
+                  <BackendVisualization />
+                </Suspense>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

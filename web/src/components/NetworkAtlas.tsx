@@ -18,6 +18,7 @@ export type AtlasPerson = {
   initials: string;
   sharedConceptIds?: string[];
   score?: number;
+  sharedEvidence?: { id: string; label: string; kind: "interest" | "context" }[];
 };
 
 type NetworkAtlasProps = {
@@ -37,34 +38,47 @@ type PersonPoint = {
   distance: number;
   opacity: number;
   inFrame: boolean;
+  kind?: "person" | "evidence" | "you";
+  priority?: number;
 };
-type SharedEdge = { a: number; b: number; strength: number };
-type LabelMap = Map<string, HTMLButtonElement>;
+type LabelMap = Map<string, HTMLElement>;
+type EvidenceNode = {
+  key: string;
+  id: string;
+  label: string;
+  kind: "interest" | "context";
+  people: number[];
+  position: THREE.Vector3;
+  selected: boolean;
+};
+const MAX_EVIDENCE = 3;
+const VIEWER_ID = "atlas:viewer";
+const VIEWER_POSITION = new THREE.Vector3(0, 0, 0.3);
 
 const GROUP_COLORS = ["#3156d3", "#8c6cac", "#dc673e", "#4f8d9a", "#8585a7"];
 // Rank determines position: the strongest match starts at the top/front.
 const PERSON_POSITIONS: [number, number, number][] = [
-  [-0.28, 1.36, 1.14],
-  [-1.42, 0.46, 0.92],
-  [1.33, 0.65, 0.75],
-  [0.25, -0.16, 1.63],
-  [-0.91, -1.1, 0.72],
-  [1.16, -1.06, 0.48],
-  [-0.63, 0.94, -1.24],
-  [1.52, -0.13, -0.9],
-  [-1.41, -0.61, -0.79],
-  [0.41, -1.44, -0.73],
-  [0.76, 1.33, -0.62],
-  [-0.05, -0.31, -1.64],
+  [-0.16, 1.64, 1.03],
+  [-1.68, 0.73, 0.88],
+  [1.65, 0.72, 0.78],
+  [-1.62, -0.93, 1.02],
+  [1.61, -0.98, 0.84],
+  [0.02, -1.66, 0.94],
+  [-0.85, 1.40, -1.24],
+  [1.78, -0.16, -0.90],
+  [-1.74, -0.42, -0.92],
+  [-0.66, -1.44, -0.86],
+  [0.87, 1.38, -0.95],
+  [0.80, -1.38, -1.09],
 ];
 
 function personPosition(index: number, count: number) {
-  if (count === 1) return new THREE.Vector3(0, 0.2, 0.75);
+  if (count === 1) return new THREE.Vector3(0.2, 1.65, 1.0);
   if (count === 2)
     return new THREE.Vector3(
-      index ? 0.94 : -0.86,
-      index ? -0.57 : 0.69,
-      index ? 0.25 : 0.8,
+      index ? 1.40 : -1.40,
+      index ? -0.95 : 1.05,
+      index ? 0.72 : 0.95,
     );
   if (index < PERSON_POSITIONS.length)
     return new THREE.Vector3(...PERSON_POSITIONS[index]);
@@ -95,43 +109,45 @@ function personLabel(person: AtlasPerson, people: AtlasPerson[]) {
     : first;
 }
 
-function sharedStrength(a: AtlasPerson, b: AtlasPerson) {
-  if (a.sharedConceptIds !== undefined || b.sharedConceptIds !== undefined) {
-    const otherIds = new Set(b.sharedConceptIds ?? []);
-    return [...new Set(a.sharedConceptIds ?? [])].filter((id) =>
-      otherIds.has(id),
-    ).length;
-  }
-  const otherGroups = new Set(b.groups ?? [b.group]);
-  return [...new Set(a.groups ?? [a.group])].filter((group) =>
-    otherGroups.has(group),
-  ).length;
-}
-
-function meaningfulEdges(people: AtlasPerson[]): SharedEdge[] {
-  const candidates: SharedEdge[] = [];
-  people.forEach((person, a) => {
-    people.slice(a + 1).forEach((other, offset) => {
-      const strength = sharedStrength(person, other);
-      if (strength) candidates.push({ a, b: a + offset + 1, strength });
+function evidenceNodes(people: AtlasPerson[], selectedId: string | null): EvidenceNode[] {
+  const candidates = new Map<string, Omit<EvidenceNode, "position">>();
+  people.forEach((person, index) => {
+    const seen = new Set<string>();
+    (person.sharedEvidence ?? []).forEach((evidence) => {
+      const key = `evidence:${evidence.kind}:${evidence.id}`;
+      if (seen.has(key) || !evidence.label.trim()) return;
+      // An interest bridge must be a member of the complete, authoritative intersection.
+      if (evidence.kind === "interest" && !person.sharedConceptIds?.includes(evidence.id)) return;
+      seen.add(key);
+      const existing = candidates.get(key);
+      if (existing) {
+        existing.people.push(index);
+        existing.selected ||= person.id === selectedId;
+      } else {
+        candidates.set(key, { ...evidence, key, people: [index], selected: person.id === selectedId });
+      }
     });
   });
-  candidates.sort(
-    (a, b) => b.strength - a.strength || a.b - a.a - (b.b - b.a) || a.a - b.a,
-  );
-  // A strongest-overlap spanning forest connects people without drawing every possible pair.
-  const components = people.map((_, index) => index);
-  const root = (index: number): number =>
-    components[index] === index ? index : root(components[index]);
-  const edges: SharedEdge[] = [];
-  candidates.forEach((edge) => {
-    const a = root(edge.a);
-    const b = root(edge.b);
-    if (a === b) return;
-    components[a] = b;
-    edges.push(edge);
+  const picked = [...candidates.values()].sort((a, b) =>
+    Number(b.selected) - Number(a.selected)
+    || Number(a.kind === "context") - Number(b.kind === "context")
+    || b.people.length - a.people.length
+    || a.people[0] - b.people[0]
+    || a.key.localeCompare(b.key),
+  ).slice(0, MAX_EVIDENCE);
+  const angles: number[] = [];
+  return picked.map((node) => {
+    const anchor = node.people.find((index) => people[index].id === selectedId) ?? node.people[0];
+    const target = personPosition(anchor, people.length);
+    const desiredAngle = Math.atan2(target.y, target.x);
+    // Separate the small explanation nodes even when several explain the same person.
+    const options = Array.from({ length: 12 }, (_, step) => desiredAngle + step * Math.PI / 6);
+    const separation = (angle: number) => Math.min(Math.PI, ...angles.map((other) => Math.abs(Math.atan2(Math.sin(angle - other), Math.cos(angle - other)))));
+    const angle = options.find((candidate) => separation(candidate) >= 1.5)
+      ?? options.sort((a, b) => separation(b) - separation(a))[0];
+    angles.push(angle);
+    return { ...node, position: new THREE.Vector3(Math.cos(angle) * 0.78, Math.sin(angle) * 0.78, 1.12) };
   });
-  return edges;
 }
 
 function fitDistance(width: number, height: number) {
@@ -181,14 +197,17 @@ function positionLabels(
 ) {
   const occupied: { x: number; y: number; width: number; height: number }[] =
     [];
-  const sorted = [...points].sort((a, b) => a.distance - b.distance);
+  const byDepth = [...points].sort((a, b) => a.distance - b.distance);
+  const sorted = [...byDepth].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0) || a.distance - b.distance);
   const limit = width < 440 ? 4 : 6;
+  let personLabels = 0;
+  let evidenceLabels = 0;
   sorted.forEach((point, index) => {
     const label = labels.get(point.id);
     if (!label) return;
     let opacity = 0;
-    const occluded = sorted
-      .slice(0, index)
+    const occluded = byDepth
+      .filter((other) => other.distance < point.distance)
       .some(
         (nearer) =>
           nearer.inFrame &&
@@ -199,7 +218,7 @@ function positionLabels(
       point.inFrame &&
       point.opacity > 0.13 &&
       !occluded &&
-      occupied.length < limit
+      (point.kind === "you" || (point.kind === "evidence" ? evidenceLabels < (width < 440 ? 2 : MAX_EVIDENCE) : personLabels < limit))
     ) {
       const labelWidth = label.offsetWidth;
       const labelHeight = label.offsetHeight;
@@ -207,6 +226,8 @@ function positionLabels(
       const right = [gap, -labelHeight / 2];
       const left = [-labelWidth - gap, -labelHeight / 2];
       const offsets = point.x > width * 0.64 ? [left, right] : [right, left];
+      if (point.kind === "evidence") offsets.unshift([-labelWidth / 2, gap], [-labelWidth / 2, -labelHeight - gap]);
+      if (point.kind === "you") offsets.unshift([-labelWidth / 2, gap]);
       offsets.push(
         [-labelWidth / 2, gap],
         [-labelWidth / 2, -labelHeight - gap],
@@ -235,6 +256,8 @@ function positionLabels(
               (other) =>
                 other.id !== point.id &&
                 other.inFrame &&
+                other.opacity > 0.25 &&
+                other.distance <= point.distance + 0.8 &&
                 other.x + other.radius > option.x - 4 &&
                 other.x - other.radius < option.x + option.width + 4 &&
                 other.y + other.radius > option.y - 4 &&
@@ -246,30 +269,55 @@ function positionLabels(
         label.style.left = `${position.x}px`;
         label.style.top = `${position.y}px`;
         opacity = point.opacity;
+        if (point.kind === "evidence") evidenceLabels += 1;
+        else if (point.kind !== "you") personLabels += 1;
       }
     }
     label.style.opacity = `${opacity}`;
     label.dataset.depth = point.distance.toFixed(3);
     label.style.zIndex = `${sorted.length - index + 1}`;
-    label.style.pointerEvents = opacity > 0.25 ? "auto" : "none";
-    label.tabIndex = opacity > 0.25 ? 0 : -1;
+    const interactive = label instanceof HTMLButtonElement;
+    label.style.pointerEvents = interactive && opacity > 0.25 ? "auto" : "none";
+    label.tabIndex = interactive && opacity > 0.25 ? 0 : -1;
     label.setAttribute("aria-hidden", opacity > 0.25 ? "false" : "true");
   });
 }
 
 function PersonLabels({
   people,
+  evidence,
   selectedId,
   onSelect,
   labels,
 }: {
   people: AtlasPerson[];
+  evidence: EvidenceNode[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   labels: LabelMap;
 }) {
   return (
     <div className="atlas-labels">
+      <span
+        className="atlas-viewer-label"
+        data-atlas-node="you"
+        ref={(element) => {
+          if (element) labels.set(VIEWER_ID, element);
+          else labels.delete(VIEWER_ID);
+        }}
+      >You</span>
+      {evidence.map((node) => <span
+        key={node.key}
+        className={`atlas-evidence-label${node.selected ? " is-selected-evidence" : ""}`}
+        data-evidence-id={node.id}
+        data-evidence-kind={node.kind}
+        data-connected-people={node.people.map((index) => people[index].id).join(",")}
+        aria-label={`Shared ${node.kind}: ${node.label}. Connects you with ${node.people.length} ${node.people.length === 1 ? "profile" : "profiles"}.`}
+        ref={(element) => {
+          if (element) labels.set(node.key, element);
+          else labels.delete(node.key);
+        }}
+      ><span>{node.label}</span></span>)}
       {people.map((person) => (
         <button
           key={person.id}
@@ -312,7 +360,7 @@ function StaticAtlas({
   const containerRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<LabelMap>(new Map());
   const [size, setSize] = useState({ width: 500, height: 450 });
-  const edges = useMemo(() => meaningfulEdges(people), [people]);
+  const evidence = useMemo(() => evidenceNodes(people, selectedId), [people, selectedId]);
   const camera = new THREE.PerspectiveCamera(
     43,
     size.width / size.height,
@@ -323,8 +371,8 @@ function StaticAtlas({
   camera.zoom = Math.max(0.7, Math.min(1.6, zoom));
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
-  const points = people.map((person, index) =>
-    projectPerson(
+  const points = people.map((person, index) => ({
+    ...projectPerson(
       person.id,
       personPosition(index, people.length),
       camera,
@@ -332,8 +380,16 @@ function StaticAtlas({
       size.height,
       selectedId === person.id ? 0.155 : 0.12,
       !matchesGroup(person, activeGroup),
-    ),
-  );
+    ), kind: "person" as const, priority: person.id === selectedId ? 6 : 0,
+  }));
+  const viewerPoint = {
+    ...projectPerson(VIEWER_ID, VIEWER_POSITION, camera, size.width, size.height, 0.14, false),
+    kind: "you" as const, opacity: 1, priority: 5,
+  };
+  const evidencePoints = evidence.map((node, index) => {
+    const point = projectPerson(node.key, node.position, camera, size.width, size.height, 0.055, false);
+    return { ...point, inFrame: point.inFrame && index < (size.width < 440 ? 2 : MAX_EVIDENCE), kind: "evidence" as const, opacity: 0.3 + point.opacity * 0.7, priority: node.selected ? node.kind === "interest" ? 4.5 : 4 : 3 };
+  });
 
   useEffect(() => {
     const container = containerRef.current;
@@ -348,7 +404,7 @@ function StaticAtlas({
     return () => observer.disconnect();
   }, []);
   useLayoutEffect(() => {
-    positionLabels(points, labelsRef.current, size.width, size.height);
+    positionLabels([...points, viewerPoint, ...evidencePoints], labelsRef.current, size.width, size.height);
   });
 
   return (
@@ -356,7 +412,7 @@ function StaticAtlas({
       <svg
         viewBox={`0 0 ${size.width} ${size.height}`}
         role="img"
-        aria-label={`${people.length} matching people; lines show shared interests`}
+        aria-label={`You connected to ${people.length} matching profiles through named shared interests and contexts`}
       >
         <defs>
           <radialGradient id={gradientId} cx="28%" cy="22%" r="80%">
@@ -365,20 +421,15 @@ function StaticAtlas({
             <stop offset="100%" stopColor="#8da3ca" />
           </radialGradient>
         </defs>
-        {edges.map(({ a, b }) => (
-          <line
-            key={`${people[a].id}-${people[b].id}`}
-            x1={points[a].x}
-            y1={points[a].y}
-            x2={points[b].x}
-            y2={points[b].y}
-            stroke="#8b9ebe"
-            strokeWidth="0.85"
-            opacity={
-              0.12 + Math.min(points[a].opacity, points[b].opacity) * 0.23
-            }
-          />
-        ))}
+        {evidence.slice(0, size.width < 440 ? 2 : MAX_EVIDENCE).map((node, index) => <g key={node.key} fill="none" stroke={node.selected ? "#ba7256" : "#9cabc2"} strokeWidth="0.9" opacity={node.selected ? 0.5 : 0.28}>
+          <line x1={viewerPoint.x} y1={viewerPoint.y} x2={evidencePoints[index].x} y2={evidencePoints[index].y} />
+          {node.people.map((personIndex) => <line key={people[personIndex].id}
+            x1={evidencePoints[index].x} y1={evidencePoints[index].y}
+            x2={points[personIndex].x} y2={points[personIndex].y} />)}
+        </g>)}
+        <circle cx={viewerPoint.x} cy={viewerPoint.y} r={viewerPoint.radius + 5} fill="none" stroke="#3156d3" opacity="0.28" />
+        <circle cx={viewerPoint.x} cy={viewerPoint.y} r={viewerPoint.radius} fill="#1d2940" stroke="#fbfcfe" strokeWidth="1.5" />
+        {evidencePoints.slice(0, size.width < 440 ? 2 : MAX_EVIDENCE).map((point) => <circle key={point.id} cx={point.x} cy={point.y} r={point.radius} fill="#dc673e" stroke="#fbfcfe" strokeWidth="1" opacity={point.opacity} />)}
         {[...points]
           .sort((a, b) => b.distance - a.distance)
           .map((point) => (
@@ -413,6 +464,7 @@ function StaticAtlas({
       </svg>
       <PersonLabels
         people={people}
+        evidence={evidence}
         selectedId={selectedId}
         onSelect={onSelect}
         labels={labelsRef.current}
@@ -430,13 +482,17 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
   const refreshRef = useRef<() => void>(() => {});
   const [webglReady, setWebglReady] = useState(false);
   const gradientId = useId().replace(/:/g, "");
+  const evidence = useMemo(() => evidenceNodes(people, selectedId), [people, selectedId]);
+  const evidenceRef = useRef(evidence);
+  evidenceRef.current = evidence;
   latestRef.current = props;
   const signature = JSON.stringify(
-    people.map(({ id, group, groups, sharedConceptIds, score }) => [
+    people.map(({ id, group, groups, sharedConceptIds, sharedEvidence, score }) => [
       id,
       group,
       groups,
       sharedConceptIds,
+      sharedEvidence,
       score,
     ]),
   );
@@ -531,23 +587,53 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       return { person, mesh, material, ring, ringMaterial };
     });
 
-    const strands = meaningfulEdges(latestRef.current.people).map(
-      ({ a, b, strength }) => {
-        const geometry = new THREE.BufferGeometry().setFromPoints([
-          personMeshes[a].mesh.position,
-          personMeshes[b].mesh.position,
-        ]);
-        const material = new THREE.LineBasicMaterial({
-          color: "#8b9ebe",
-          transparent: true,
-          opacity: 0.26,
-          depthWrite: false,
+    const viewerMaterial = new THREE.MeshPhysicalMaterial({ color: "#1d2940", roughness: 0.4, metalness: 0.05 });
+    const viewer = new THREE.Mesh(sphereGeometry, viewerMaterial);
+    viewer.position.copy(VIEWER_POSITION);
+    viewer.scale.setScalar(0.14);
+    network.add(viewer);
+    const viewerRingMaterial = new THREE.MeshBasicMaterial({ color: "#3156d3", transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+    const viewerRing = new THREE.Mesh(ringGeometry, viewerRingMaterial);
+    viewerRing.position.copy(VIEWER_POSITION);
+    viewerRing.scale.setScalar(0.14);
+    network.add(viewerRing);
+    resources.push(viewerMaterial, viewerRingMaterial);
+
+    // Reuse a small fixed pool: changing the selected profile updates evidence without replacing WebGL.
+    const evidenceMeshes = Array.from({ length: MAX_EVIDENCE }, () => {
+      const material = new THREE.MeshBasicMaterial({ color: "#dc673e", transparent: true });
+      const mesh = new THREE.Mesh(sphereGeometry, material);
+      mesh.scale.setScalar(0.055);
+      network.add(mesh);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array((personMeshes.length + 1) * 6), 3));
+      const lineMaterial = new THREE.LineBasicMaterial({ color: "#bd795d", transparent: true, opacity: 0.4, depthWrite: false });
+      const lines = new THREE.LineSegments(geometry, lineMaterial);
+      lines.frustumCulled = false;
+      network.add(lines);
+      resources.push(material, geometry, lineMaterial);
+      return { mesh, material, geometry, lines, lineMaterial };
+    });
+    let previousEvidence: EvidenceNode[] | undefined;
+    const syncEvidence = () => {
+      const currentEvidence = evidenceRef.current;
+      if (currentEvidence === previousEvidence) return;
+      previousEvidence = currentEvidence;
+      evidenceMeshes.forEach(({ mesh, geometry, lines }, index) => {
+        const node = currentEvidence[index];
+        mesh.visible = lines.visible = Boolean(node);
+        if (!node) return;
+        mesh.position.copy(node.position);
+        const attribute = geometry.getAttribute("position") as THREE.BufferAttribute;
+        const values = attribute.array as Float32Array;
+        values.set([...VIEWER_POSITION.toArray(), ...node.position.toArray()], 0);
+        node.people.forEach((personIndex, memberIndex) => {
+          values.set([...node.position.toArray(), ...personMeshes[personIndex].mesh.position.toArray()], (memberIndex + 1) * 6);
         });
-        network.add(new THREE.Line(geometry, material));
-        resources.push(geometry, material);
-        return { a, b, strength, material };
-      },
-    );
+        attribute.needsUpdate = true;
+        geometry.setDrawRange(0, (node.people.length + 1) * 2);
+      });
+    };
 
     const worldPosition = new THREE.Vector3();
     const render = () => {
@@ -556,6 +642,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       camera.zoom = Math.max(0.7, Math.min(1.6, current.zoom));
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld();
+      syncEvidence();
       network.updateMatrixWorld(true);
       const points = personMeshes.map(
         ({ person, mesh, material, ring, ringMaterial }) => {
@@ -580,20 +667,28 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
           ring.quaternion.copy(
             network.quaternion.clone().invert().multiply(camera.quaternion),
           );
-          return point;
+          return { ...point, kind: "person" as const, priority: selected ? 6 : 0 };
         },
       );
-      strands.forEach(({ a, b, strength, material }) => {
-        const selected =
-          current.selectedId === personMeshes[a].person.id ||
-          current.selectedId === personMeshes[b].person.id;
-        material.opacity =
-          (selected ? 0.19 : 0.1) +
-          Math.min(points[a].opacity, points[b].opacity) *
-            Math.min(0.28, 0.15 + strength * 0.025);
-        material.color.set(selected ? "#3156d3" : "#8b9ebe");
+      viewer.getWorldPosition(worldPosition);
+      const viewerPoint = {
+        ...projectPerson(VIEWER_ID, worldPosition, camera, width, height, 0.14, false),
+        kind: "you" as const, opacity: 1, priority: 5,
+      };
+      viewerRing.quaternion.copy(network.quaternion.clone().invert().multiply(camera.quaternion));
+      const evidencePoints = evidenceRef.current.map((node, index) => {
+        const { mesh, material, lineMaterial, lines } = evidenceMeshes[index];
+        const shown = index < (width < 440 ? 2 : MAX_EVIDENCE);
+        mesh.visible = lines.visible = shown;
+        mesh.getWorldPosition(worldPosition);
+        const point = projectPerson(node.key, worldPosition, camera, width, height, 0.055, false);
+        material.opacity = 0.35 + point.opacity * 0.65;
+        lineMaterial.opacity = (node.selected ? 0.24 : 0.10) + point.opacity * (node.selected ? 0.24 : 0.14);
+        lineMaterial.color.set(node.selected ? "#b87557" : "#92a3be");
+        return { ...point, inFrame: point.inFrame && shown, kind: "evidence" as const, opacity: 0.3 + point.opacity * 0.7, priority: node.selected ? node.kind === "interest" ? 4.5 : 4 : 3 };
       });
-      positionLabels(points, labelsRef.current, width, height);
+      positionLabels([...points, viewerPoint, ...evidencePoints], labelsRef.current, width, height);
+
       renderer.render(scene, camera);
     };
     const shouldAnimate = () =>
@@ -735,6 +830,7 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       {webglReady && (
         <PersonLabels
           people={people}
+          evidence={evidence}
           selectedId={selectedId}
           onSelect={props.onSelect}
           labels={labelsRef.current}

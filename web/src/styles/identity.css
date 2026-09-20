@@ -904,6 +904,58 @@ h4 {
 .settings-privacy {
   background: #e5ecf8;
 }
+.settings-backend-link {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px;
+  margin-bottom: 24px;
+  background: #1d2940;
+  border: 1px solid #334763;
+  border-radius: 7px;
+  color: #c4d0e7;
+  text-decoration: none;
+}
+.settings-backend-link:hover {
+  border-color: #7793cd;
+  background: #23324d;
+}
+.settings-backend-link:focus-visible {
+  outline: 2px solid #3156d3;
+  outline-offset: 4px;
+}
+.settings-backend-icon {
+  color: #94adf4;
+}
+.settings-backend-link > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.settings-backend-link small {
+  display: block;
+  font-size: 8px;
+  letter-spacing: 0.13em;
+  color: #a2b4d5;
+  margin-bottom: 6px;
+}
+.settings-backend-link strong {
+  display: block;
+  color: #f1f4fb;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+}
+.settings-backend-link > span > span {
+  display: block;
+  color: #abbad2;
+  font-size: 11px;
+  line-height: 1.7;
+  margin-top: 6px;
+}
+.settings-backend-link > svg {
+  color: #f49a72;
+  flex-shrink: 0;
+}
 .settings-privacy > svg {
   color: #6988ba;
 }
