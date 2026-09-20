@@ -213,6 +213,9 @@ h4 {
 .settings-link {
   margin-bottom: 13px;
 }
+.sidebar-backend-link {
+  margin-bottom: 5px;
+}
 .sidebar-profile {
   border-color: #3a4760;
   margin-inline: -17px;

@@ -14,6 +14,7 @@ import {
   Layers3,
   LogOut,
   Menu,
+  Network,
   Plus,
   Search,
   Settings2,
@@ -164,7 +165,16 @@ function Shell() {
             <small>People, interests, and the connections between them.</small>
           </Link>
           <NavLink
+            to="/settings/backend"
+            onClick={() => setMenu(false)}
+            className="side-link sidebar-backend-link"
+          >
+            <Network size={18} />
+            <span>Visualise backend</span>
+          </NavLink>
+          <NavLink
             to="/settings"
+            end
             onClick={() => setMenu(false)}
             className="side-link settings-link"
           >
