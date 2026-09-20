@@ -20,37 +20,54 @@ export function InterestEditor({
   const [rawText, setRawText] = useState("");
   const [stance, setStance] = useState<Stance>(defaultStance);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!rawText.trim()) return;
     setSubmitting(true);
+    setError("");
     try {
       // Resolution is async — never block the input on the model. This
       // accepts immediately; the concept chip fills in on a later fetch.
       await api.postInterest(rawText.trim(), stance);
       onSubmitted?.(rawText.trim(), stance);
       setRawText("");
+    } catch {
+      setError("Could not add your interest. Try again.");
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <form
+      className="interest-editor"
+      onSubmit={handleSubmit}
+      style={{
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
       <input
+        aria-label="Add an interest"
         value={rawText}
         onChange={(e) => setRawText(e.target.value)}
         placeholder={placeholder}
         style={{
-          flex: 1,
+          flex: "1 1 180px",
+          minWidth: 0,
           fontSize: "var(--fs-base)",
           padding: "8px 12px",
           border: "1px solid var(--ink-200)",
           borderRadius: 8,
         }}
       />
-      {showStanceSelector && <StanceSelect value={stance} onChange={setStance} />}
+      {showStanceSelector && (
+        <StanceSelect value={stance} onChange={setStance} />
+      )}
       <button
         type="submit"
         disabled={submitting || !rawText.trim()}
@@ -68,6 +85,14 @@ export function InterestEditor({
       >
         Add
       </button>
+      {error && (
+        <p
+          role="alert"
+          style={{ flexBasis: "100%", color: "#a3463a", fontSize: 12 }}
+        >
+          {error}
+        </p>
+      )}
     </form>
   );
 }

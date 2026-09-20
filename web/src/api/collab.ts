@@ -1,4 +1,6 @@
 import type { AiAttachable, AiMessage, AiSource, AiThread, AiThreadDetail, Conversation, MessagePage, Message, NodeView, WorkspaceDetail, WorkspaceList, ConversationState } from "../collab/types";
+import { USING_FIXTURES } from "./client";
+import { fixtures } from "../home/fixtures";
 
 const BASE = "/api";
 
@@ -24,6 +26,8 @@ const MESSAGES: Record<string, string> = {
   too_many_files: "This workspace has too many files.",
   cannot_move_into_itself: "A folder can't be moved into itself.",
   unauthenticated: "Please sign in again.",
+  demo_backend_required: "This feature needs the connected backend. The local preview does not send messages, share files, or run an AI model.",
+  demo_request_pending: "Your preview request is saved on this browser. No message was sent; replies require the connected backend.",
 };
 
 export class ApiError extends Error {
@@ -35,7 +39,104 @@ export class ApiError extends Error {
   }
 }
 
+export const DEMO_COLLAB_UPDATED = "link:demo-collaboration-updated";
+const DEMO_CONVERSATIONS_KEY = "link.demo.conversations.v1";
+type DemoConversation = { conversation: Conversation; messages: Message[] };
+let demoConversations: DemoConversation[] = [];
+if (USING_FIXTURES) {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(DEMO_CONVERSATIONS_KEY) ?? "[]");
+    if (Array.isArray(stored)) {
+      demoConversations = stored.filter((item): item is DemoConversation => {
+        const conversation = item?.conversation;
+        return conversation && typeof conversation.id === "string" && conversation.state === "requested" &&
+          typeof conversation.updatedAt === "string" &&
+          fixtures.people.some(({ actor }) => actor.id === conversation.counterparty?.id) &&
+          Array.isArray(item.messages) && item.messages.every((message: Message) =>
+            message && typeof message.id === "string" && typeof message.body === "string" &&
+            typeof message.senderId === "string" && typeof message.createdAt === "string",
+          );
+      }).map((item, conversationIndex) => {
+        // Message pagination in the shared UI compares bigint IDs, just like
+        // the backend. Normalize older preview IDs before they reach it.
+        const messages = item.messages.map((message, messageIndex) => ({
+          ...message,
+          id: /^\d+$/.test(message.id) ? message.id : `${Date.now()}${String(conversationIndex).padStart(3, "0")}${String(messageIndex).padStart(3, "0")}`,
+        }));
+        return {
+          conversation: {
+            ...item.conversation,
+            counterparty: fixtures.people.find(({ actor }) => actor.id === item.conversation.counterparty.id)!.actor,
+            incomingRequest: false,
+            unread: 0,
+            lastMessage: messages[messages.length - 1] ?? null,
+          },
+          messages,
+        };
+      });
+    }
+  } catch {
+    // Browser storage is optional; requests can still be previewed in memory.
+  }
+}
+
+function saveDemoConversations() {
+  try {
+    localStorage.setItem(DEMO_CONVERSATIONS_KEY, JSON.stringify(demoConversations));
+  } catch {
+    // A full or unavailable store must not prevent a local preview.
+  }
+  window.dispatchEvent(new Event(DEMO_COLLAB_UPDATED));
+}
+
+async function demoCall<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const route = path.split("?")[0];
+  let result: unknown;
+  if (method === "GET" && route === "/conversations") {
+    result = demoConversations.map(({ conversation }) => ({ ...conversation }));
+  } else if (method === "GET" && route === "/workspaces") {
+    result = { workspaces: [], invites: [] };
+  } else if (method === "GET" && route === "/ai/threads") {
+    result = [];
+  } else if (method === "GET" && route === "/ai/sources") {
+    result = { conversations: [], workspaces: [] };
+  } else if (method === "POST" && route === "/conversations") {
+    const request = body as { targetId: string; body: string };
+    const counterparty = fixtures.people.find(({ actor }) => actor.id === request.targetId)?.actor;
+    if (!counterparty) throw new ApiError(404, "not_found");
+    if (!request.body.trim()) throw new ApiError(400, "message_required");
+    if (request.body.length > 4000) throw new ApiError(400, "message_too_long");
+    if (demoConversations.some(({ conversation }) => conversation.counterparty.id === request.targetId)) {
+      throw new ApiError(409, "demo_request_pending");
+    }
+    const createdAt = new Date().toISOString();
+    const id = `demo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const message: Message = { id: `${Date.now()}${Math.floor(Math.random() * 1_000_000).toString().padStart(6, "0")}`, senderId: fixtures.viewer.id, body: request.body.trim(), createdAt };
+    const conversation: Conversation = {
+      id, state: "requested", incomingRequest: false, counterparty,
+      lastMessage: message, unread: 0, updatedAt: createdAt,
+    };
+    demoConversations.unshift({ conversation, messages: [message] });
+    saveDemoConversations();
+    result = { conversationId: id, state: "requested", message };
+  } else if (method === "GET" && /^\/conversations\/[^/]+\/messages$/.test(route)) {
+    const record = demoConversations.find(({ conversation }) => conversation.id === route.split("/")[2]);
+    if (!record) throw new ApiError(404, "not_found");
+    result = { state: record.conversation.state, counterpartyId: record.conversation.counterparty.id, incomingRequest: false, messages: record.messages.map((message) => ({ ...message })) };
+  } else if (method === "POST" && /^\/conversations\/[^/]+\/read$/.test(route)) {
+    result = undefined;
+  } else if (method === "POST" && /^\/conversations\/[^/]+\/messages$/.test(route)) {
+    throw new ApiError(409, "demo_request_pending");
+  } else if (method === "GET") {
+    throw new ApiError(404, "not_found");
+  } else {
+    throw new ApiError(503, "demo_backend_required");
+  }
+  return result as T;
+}
+
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  if (USING_FIXTURES) return demoCall<T>(method, path, body);
   const res = await fetch(`${BASE}${path}`, {
     method,
     credentials: "include",
@@ -65,6 +166,7 @@ export interface AiStreamHandlers {
 // The answer arrives as server-sent events over a POST, so it is read with
 // fetch + a stream reader (EventSource can't POST).
 async function streamAnswer(threadId: string, text: string, h: AiStreamHandlers, signal: AbortSignal): Promise<void> {
+  if (USING_FIXTURES) throw new ApiError(503, "demo_backend_required");
   const res = await fetch(`${BASE}/ai/threads/${threadId}/messages`, {
     method: "POST",
     credentials: "include",
@@ -144,6 +246,7 @@ export const collabApi = {
   rawUrl: (id: string, nodeId: string) => `${BASE}/workspaces/${id}/nodes/${nodeId}/raw`,
 
   async upload(id: string, files: File[], parentId: string | null): Promise<{ failed: { name: string; error: string }[] }> {
+    if (USING_FIXTURES) throw new ApiError(503, "demo_backend_required");
     const form = new FormData();
     for (const f of files) form.append("files", f);
     if (parentId) form.append("parentId", parentId);

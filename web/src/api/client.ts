@@ -162,11 +162,100 @@ const realApi = {
 };
 
 // ---- Fixture client --------------------------------------------------------
-// Same surface, resolved from the canned dataset. Mutations are kept in module
-// state so the demo responds to what you do to it within a session.
-
-const fixtureInterests = [...fixtures.interests];
+// Same surface, resolved from the sample dataset. Only browser-local settings
+// are persisted; they never imply that a server received a change.
+const FIXTURE_SETTINGS_KEY = "link.demo.settings.v1";
+const fixtureInterests = fixtures.interests.map((interest) => ({ ...interest }));
 let fixtureDiscoverable = true;
+
+if (USING_FIXTURES) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FIXTURE_SETTINGS_KEY) ?? "null");
+    if (typeof saved?.discoverable === "boolean") fixtureDiscoverable = saved.discoverable;
+    if (Array.isArray(saved?.interests) && saved.interests.every((row: InterestRow) =>
+      row && typeof row.id === "string" && typeof row.rawText === "string" &&
+      ["established", "exploring", "aspiring"].includes(row.stance) &&
+      ["public", "institution", "private"].includes(row.visibility) &&
+      typeof row.resolved === "boolean" &&
+      (row.conceptId === null || typeof row.conceptId === "string") &&
+      (row.conceptLabel === null || typeof row.conceptLabel === "string"),
+    )) fixtureInterests.splice(0, fixtureInterests.length, ...saved.interests);
+  } catch {
+    // Storage can be unavailable or stale; the sample still works in memory.
+  }
+}
+
+function saveFixtureSettings() {
+  try {
+    localStorage.setItem(FIXTURE_SETTINGS_KEY, JSON.stringify({ interests: fixtureInterests, discoverable: fixtureDiscoverable }));
+  } catch {
+    // Private browsing or a full quota should not prevent trying the preview.
+  }
+}
+
+const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const QUERY_WORDS = new Set("a an the and or i me my to in on of for with who that people person someone find looking interested interest want wants build builds learn learning study studies help teammate teammates collaborator collaborators work working does do is are can would like".split(" "));
+const TOPIC_ALIASES: Record<string, RegExp> = {
+  "c-ml": /\b(ai|artificial intelligence|machine learning|ml|neural networks?|deep learning|data science)\b/,
+  "c-cv": /\b(computer vision|vision|image recognition|perception)\b/,
+  "c-rob": /\b(robotics|robots?|autonomous systems?|automation)\b/,
+  "c-crypt": /\b(cryptography|cryptographic|encryption|cybersecurity|security)\b/,
+  "c-hci": /\b(human computer interaction|human centered|hci|ux|user experience|interfaces?|design)\b/,
+  "c-net": /\b(computer networks?|networking|networks?)\b/,
+  "c-se": /\b(software engineering|software|coding|codes?|programming|developer|developers|open source)\b/,
+  "c-db": /\b(database systems?|databases?|sql|data storage)\b/,
+};
+
+/** Transparent keyword/alias matching over sample evidence, with no model call. */
+function searchFixtures(query: string): SmartSearchResult {
+  const normalized = normalize(query);
+  const tokens = normalized.split(" ").filter((token) => token.length > 1 && !QUERY_WORDS.has(token));
+  const entries = [...fixtures.people, ...fixtures.societies];
+  const concepts = [...new Map(entries.flatMap(({ actor }) => actor.topConcepts.map((concept) => [concept.conceptId, concept] as const))).values()];
+  const topics = concepts.filter((concept) =>
+    normalized.length > 0 && (TOPIC_ALIASES[concept.conceptId]?.test(normalized) || normalized.includes(normalize(concept.label))),
+  );
+  const topicIds = new Set(topics.map((topic) => topic.conceptId));
+  const matchesName = (actor: ActorSummary) => tokens.length > 0 && tokens.every((token) =>
+    normalize(actor.displayName).split(" ").some((word) => word === token || (token.length >= 3 && word.startsWith(token))),
+  );
+  const matches = entries.map((entry) => {
+    const matched = entry.actor.topConcepts.filter((concept) => topicIds.has(concept.conceptId))
+      .map((concept) => ({ conceptId: concept.conceptId, label: concept.label, note: "Listed on this sample profile" }));
+    const contextReasons = entry.reasons.filter((reason) => reason.kind === "shared_context" &&
+      tokens.length > 0 && tokens.every((token) => normalize(reason.summary).includes(token)));
+    const byName = matchesName(entry.actor);
+    const reasons: Reason[] = matched.map((concept) => ({
+      kind: "shared_concept",
+      summary: `Lists ${concept.label} as an interest`,
+      evidence: [{ kind: "concept", id: concept.conceptId, label: concept.label }],
+    }));
+    return { ...entry, matched, reasons: [...reasons, ...contextReasons], score: matched.length * 10 + (byName ? 20 : 0) + contextReasons.length * 5 };
+  }).filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score || a.actor.id.localeCompare(b.actor.id));
+  const people: SmartSearchResult["people"] = matches.filter(({ actor }) => actor.kind === "person").map((entry) => ({
+    actor: entry.actor,
+    matchKind: entry.actor.personKind === "faculty" ? "mentor" : "peer",
+    score: entry.score,
+    reasons: entry.reasons,
+    matched: entry.matched,
+    facetsMatched: entry.matched.length,
+  }));
+  const groups: SmartSearchResult["groups"] = matches.flatMap((entry) => {
+    const groupKind = entry.actor.kind;
+    return groupKind === "club" || groupKind === "lab" || groupKind === "department"
+      ? [{ actor: entry.actor, groupKind, score: entry.score, matched: entry.matched, members: 0 }]
+      : [];
+  });
+  return {
+    query, correctedQuery: null,
+    interpretation: "Local preview: matching sample profiles by listed topics, names, and shared contexts.",
+    refined: false,
+    facets: topics.map((topic) => ({ name: topic.label, topics: [{ conceptId: topic.conceptId, label: topic.label, weight: 1, kind: "match" }] })),
+    people, totalPeople: people.length, groups,
+    nameMatches: entries.filter(({ actor }) => matchesName(actor)).map(({ actor }) => actor),
+    unmatchedFacets: [], timingsMs: {},
+  };
+}
 
 /** A small delay on reads, so loading states are exercised rather than skipped. */
 const settle = <T>(value: T, ms = 120): Promise<T> =>
@@ -180,7 +269,7 @@ const fixtureApi: typeof realApi = {
   getSuggestions: (limit?: number) =>
     settle([...fixtures.people, ...fixtures.societies].slice(0, limit ?? 5)),
   getConnection: (otherId: string) =>
-    settle(fixtures.people.find((p) => p.actor.id === otherId)?.reasons ?? []),
+    settle([...fixtures.people, ...fixtures.societies].find((p) => p.actor.id === otherId)?.reasons ?? []),
   getConceptActors: (conceptId: string) =>
     settle(
       [...fixtures.people, ...fixtures.societies]
@@ -191,36 +280,42 @@ const fixtureApi: typeof realApi = {
   createAsk: () => settle({ id: "ask-new" }),
   searchAspirations: (q: string) => settle(fixtures.aspirations(q), 320),
   searchBlurbs: async () => null,
-  searchSmart: async (q: string, ai = false) =>
-    ai
-      ? null
-      : settle({ query: q, correctedQuery: null, interpretation: null, refined: false, facets: [], people: [], totalPeople: 0, groups: [], nameMatches: [], unmatchedFacets: [], timingsMs: {} }, 200),
+  searchSmart: async (q: string, ai = false, signal?: AbortSignal) => {
+    if (signal?.aborted) throw new DOMException("Search cancelled", "AbortError");
+    if (ai) return null;
+    const result = await settle(searchFixtures(q), 160);
+    if (signal?.aborted) throw new DOMException("Search cancelled", "AbortError");
+    return result;
+  },
   postInterest: (rawText: string, stance) => {
     fixtureInterests.push({
-      id: `i-${fixtureInterests.length}`,
-      rawText,
+      id: `i-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      rawText: rawText.trim(),
       conceptLabel: null,
       stance,
       visibility: "institution",
       resolved: false,
       conceptId: null,
     });
+    saveFixtureSettings();
     return settle({ ok: true as const });
   },
   setDiscoverable: (discoverable: boolean) => {
     fixtureDiscoverable = discoverable;
+    saveFixtureSettings();
     return settle(fixtures.viewer);
   },
-  listInterests: () => settle(fixtureInterests),
+  listInterests: () => settle(fixtureInterests.map((interest) => ({ ...interest }))),
   setInterestVisibility: (interestId: string, visibility) => {
     const row = fixtureInterests.find((i) => i.id === interestId);
     if (row) row.visibility = visibility;
+    saveFixtureSettings();
     return settle({ ok: true as const });
   },
   createActor: () => settle(fixtures.viewer),
   getCourseCatalog: () => settle(fixtures.courses),
   listImports: () => settle(fixtures.imports),
-  createImport: () => settle({ id: "im-new" }),
+  createImport: async () => { throw new Error("Import processing needs the connected backend. This local preview does not upload or process your files."); },
   me: () => settle({ status: 200, body: { actor: fixtures.viewer, authMode: "demo" as const } }),
   login: () => settle({ status: 200, body: { actor: fixtures.viewer, authMode: "demo" as const } }),
   logout: () => settle(undefined),

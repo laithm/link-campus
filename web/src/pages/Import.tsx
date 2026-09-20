@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api/client";
+import { api, USING_FIXTURES } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { CourseImport } from "../components/CourseImport";
 import { DocumentImport } from "../components/DocumentImport";
@@ -49,7 +49,9 @@ export function Import() {
     }
 
     function nextDelay(): number {
-      return imports.some((i) => i.status === "pending" || i.status === "running")
+      return imports.some(
+        (i) => i.status === "pending" || i.status === "running",
+      )
         ? ACTIVE_POLL_MS
         : IDLE_POLL_MS;
     }
@@ -69,13 +71,31 @@ export function Import() {
   return (
     <div style={{ maxWidth: 720, display: "grid", gap: 24 }}>
       <div style={{ display: "grid", gap: 6 }}>
-        <h1 style={{ fontSize: "var(--fs-xl)", color: "var(--ink-900)" }}>Import</h1>
-        <p style={{ fontSize: "var(--fs-base)", color: "var(--ink-600)", lineHeight: "var(--lh-body)" }}>
-          Bring in what you've already written down. Everything below turns into interests and shared
-          contexts on the same graph — nothing here is a separate profile.
+        <h1 style={{ fontSize: "var(--fs-xl)", color: "var(--ink-900)" }}>
+          Import
+        </h1>
+        <p
+          style={{
+            fontSize: "var(--fs-base)",
+            color: "var(--ink-600)",
+            lineHeight: "var(--lh-body)",
+          }}
+        >
+          Bring in what you've already written down. Everything below turns into
+          interests and shared contexts on the same graph — nothing here is a
+          separate profile.
         </p>
       </div>
 
+      {USING_FIXTURES && (
+        <div className="import-demo-note">
+          <strong>A preview of your profile tools.</strong>
+          <p>
+            Explore the options below. Processing documents and repositories
+            requires the connected backend; files are not uploaded in this demo.
+          </p>
+        </div>
+      )}
       <DocumentImport
         actorId={actorId}
         kind="resume"
@@ -101,10 +121,22 @@ export function Import() {
       <CourseImport actorId={actorId} onSubmitted={refresh} />
 
       <section style={{ display: "grid", gap: 12 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-          <h2 style={{ fontSize: "var(--fs-lg)", color: "var(--ink-900)" }}>What's landed</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 12,
+          }}
+        >
+          <h2 style={{ fontSize: "var(--fs-lg)", color: "var(--ink-900)" }}>
+            What's landed
+          </h2>
           {resolvedTotal > 0 && (
-            <Link to="/" style={{ fontSize: "var(--fs-sm)", color: "var(--tq-600)" }}>
+            <Link
+              to="/"
+              style={{ fontSize: "var(--fs-sm)", color: "var(--tq-600)" }}
+            >
               See your constellation →
             </Link>
           )}

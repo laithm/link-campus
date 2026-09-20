@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { streamSse } from "../api/sse";
 import { AiBadge } from "./AiBadge";
+import { USING_FIXTURES } from "../api/client";
 
 // "Learn more" in the profile panel: a short AI summary of what this person does and
 // has done, streamed in when asked for (never automatically — it costs a model call).
@@ -12,6 +13,14 @@ export function AiSummary({ actorId, name }: { actorId: string; name: string }) 
   const abort = useRef<AbortController | null>(null);
 
   useEffect(() => () => abort.current?.abort(), []);
+
+  if (USING_FIXTURES) {
+    return (
+      <p style={{ fontSize: "var(--fs-xs)", color: "var(--ink-500)", lineHeight: 1.6 }}>
+        This is a sample profile. AI summaries are available when the backend and local model are connected.
+      </p>
+    );
+  }
 
   async function learnMore() {
     abort.current?.abort();

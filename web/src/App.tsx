@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { ParticleField } from "./components/ParticleField";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Home } from "./pages/Home";
@@ -11,7 +10,9 @@ import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 
 // Editor + tree libraries are heavy; only load them when the page is opened.
-const Collaborations = lazy(() => import("./pages/Collaborations").then((m) => ({ default: m.Collaborations })));
+const Collaborations = lazy(() =>
+  import("./pages/Collaborations").then((m) => ({ default: m.Collaborations })),
+);
 
 // Any unauthenticated route redirects to /login; render nothing until
 // GET /auth/me resolves, to avoid a flash of the login form for an
@@ -33,7 +34,6 @@ function LoginRoute() {
 export function App() {
   return (
     <BrowserRouter>
-      <ParticleField />
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginRoute />} />
@@ -57,6 +57,7 @@ export function App() {
               }
             />
             <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>
       </AuthProvider>

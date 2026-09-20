@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { collabApi } from "../api/collab";
+import { collabApi, DEMO_COLLAB_UPDATED } from "../api/collab";
+import { USING_FIXTURES } from "../api/client";
 import type { Conversation, WorkspaceList } from "./types";
 
 type EventName = "message" | "request" | "conversation_update" | "workspace_invite" | "workspace_update";
@@ -51,6 +52,14 @@ export function CollabProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!actor) return;
     load();
+    if (USING_FIXTURES) {
+      setLive(false);
+      window.addEventListener(DEMO_COLLAB_UPDATED, refresh);
+      return () => {
+        window.removeEventListener(DEMO_COLLAB_UPDATED, refresh);
+        window.clearTimeout(pending.current);
+      };
+    }
     const es = new EventSource("/api/events", { withCredentials: true });
     es.onopen = () => {
       setLive(true);

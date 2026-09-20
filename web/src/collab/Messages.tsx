@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Plus, Send } from "lucide-react";
-import { api } from "../api/client";
+import { api, USING_FIXTURES } from "../api/client";
 import { collabApi } from "../api/collab";
 import { useAuth } from "../auth/AuthContext";
 import type { ActorSummary } from "../types/api";
@@ -34,15 +34,15 @@ export function Messages({
     <div className={`cl-main${selection ? " has-selection" : ""}`}>
       <section className="cl-list" aria-label="Conversations">
         <div className="cl-list-head">
-          <h2>Messages</h2>
-          <button className="cl-icon-btn" aria-label="New message" title="New message" onClick={() => setComposing(true)}>
+          <h2>{USING_FIXTURES ? "Preview requests" : "Messages"}</h2>
+          <button className="cl-icon-btn" aria-label={USING_FIXTURES ? "New preview request" : "New message"} title={USING_FIXTURES ? "New preview request" : "New message"} onClick={() => setComposing(true)}>
             <Plus size={18} />
           </button>
         </div>
         <div className="cl-scroll">
           {conversations.length === 0 && (
             <p className="cl-empty">
-              No conversations yet. Start one with the <strong>+</strong> button, or from anyone's profile.
+              {USING_FIXTURES ? "Try drafting a connection request with the + button, or from a profile. Requests stay in this browser; no messages are sent." : <>No conversations yet. Start one with the <strong>+</strong> button, or from anyone's profile.</>}
             </p>
           )}
           {requests.length > 0 && <div className="cl-section">Requests</div>}
@@ -53,7 +53,7 @@ export function Messages({
           {threads.map((c) => (
             <Row key={c.id} c={c} active={selectedId === c.id && !composing} onOpen={() => open(c.id)} />
           ))}
-          {sent.length > 0 && <div className="cl-section">Waiting for a reply</div>}
+          {sent.length > 0 && <div className="cl-section">{USING_FIXTURES ? "Saved on this browser" : "Waiting for a reply"}</div>}
           {sent.map((c) => (
             <Row key={c.id} c={c} active={selectedId === c.id && !composing} onOpen={() => open(c.id)} />
           ))}
@@ -72,7 +72,7 @@ export function Messages({
         <Thread key={selection.id} id={selection.id} onBack={() => onSelect(null)} />
       ) : (
         <div className="cl-pane">
-          <p className="cl-empty">Select a conversation to read it, or start a new one.</p>
+          <p className="cl-empty">{USING_FIXTURES ? "Open a saved preview request or draft a new one. No messages are sent." : "Select a conversation to read it, or start a new one."}</p>
         </div>
       )}
     </div>
@@ -264,7 +264,7 @@ function Thread({ id, onBack }: { id: string; onBack: () => void }) {
           </span>
         </div>
       ) : iAsked ? (
-        <div className="cl-banner">Request sent. You can keep talking once {name} accepts.</div>
+        <div className="cl-banner">{USING_FIXTURES ? "Preview request saved in this browser. No message was sent. Replies need the connected backend." : <>Request sent. You can keep talking once {name} accepts.</>}</div>
       ) : state === "declined" ? (
         <div className="cl-banner">This conversation was declined.</div>
       ) : (
@@ -342,7 +342,7 @@ function NewMessage({ onCancel, onStarted }: { onCancel: () => void; onStarted: 
         <button className="cl-icon-btn cl-back" aria-label="Cancel" onClick={onCancel}>
           <ArrowLeft size={18} />
         </button>
-        <h2>New message</h2>
+        <h2>{USING_FIXTURES ? "New preview request" : "New message"}</h2>
       </div>
       {!picked ? (
         <>
@@ -388,11 +388,11 @@ function NewMessage({ onCancel, onStarted }: { onCancel: () => void; onStarted: 
           </p>
           {existing ? (
             <p className="cl-sub">
-              You already have a conversation with {picked.displayName}. Sending continues it.
+              {USING_FIXTURES ? <>A preview request for {picked.displayName} is already saved. <button type="button" className="cl-btn secondary" onClick={() => onStarted(existing.id)}>Open saved request</button></> : <>You already have a conversation with {picked.displayName}. Sending continues it.</>}
             </p>
           ) : (
             <p className="cl-sub">
-              This is sent as a request. {picked.displayName} chooses whether to accept before you can keep talking.
+              {USING_FIXTURES ? "This preview saves your request in this browser. No message will be sent." : <>This is sent as a request. {picked.displayName} chooses whether to accept before you can keep talking.</>}
             </p>
           )}
           <textarea
@@ -410,8 +410,8 @@ function NewMessage({ onCancel, onStarted }: { onCancel: () => void; onStarted: 
             <button type="button" className="cl-btn secondary" onClick={onCancel}>
               Cancel
             </button>
-            <button className="cl-btn" type="submit" disabled={busy || !text.trim()}>
-              <Send size={16} /> Send
+            <button className="cl-btn" type="submit" disabled={busy || !text.trim() || (USING_FIXTURES && !!existing)}>
+              <Send size={16} /> {USING_FIXTURES ? "Save preview request" : "Send"}
             </button>
           </div>
         </form>

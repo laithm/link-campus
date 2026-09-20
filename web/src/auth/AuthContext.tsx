@@ -21,21 +21,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.me().then(({ body }) => {
-      setAuthMode(body.authMode);
-      setActor(body.actor ?? null);
-      setLoading(false);
-    });
+    let cancelled = false;
+    api.me()
+      .then(({ body }) => {
+        if (cancelled) return;
+        setAuthMode(body.authMode);
+        setActor(body.actor ?? null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAuthMode("real");
+        setActor(null);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const { status, body } = await api.login(username, password);
-    if (status !== 200 || !body.actor) {
-      return { ok: false as const, error: body.error ?? "That username or password didn't match" };
+    try {
+      const { status, body } = await api.login(username, password);
+      if (status !== 200 || !body.actor) {
+        return { ok: false as const, error: body.error ?? "That username or password didn't match" };
+      }
+      setActor(body.actor);
+      setAuthMode(body.authMode);
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, error: "Could not reach the server. Start the backend or use the local demo." };
     }
-    setActor(body.actor);
-    setAuthMode(body.authMode);
-    return { ok: true as const };
   }, []);
 
   const logout = useCallback(async () => {
