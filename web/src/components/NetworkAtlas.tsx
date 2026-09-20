@@ -1,7 +1,14 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import '../styles/network-atlas.css';
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import "../styles/network-atlas.css";
 
 export type AtlasPerson = {
   id: string;
@@ -9,6 +16,8 @@ export type AtlasPerson = {
   group: number;
   groups?: number[];
   initials: string;
+  sharedConceptIds?: string[];
+  score?: number;
 };
 
 type NetworkAtlasProps = {
@@ -20,156 +29,417 @@ type NetworkAtlasProps = {
   zoom: number;
 };
 
-const GROUP_COLORS = ['#168f8d', '#a394c7', '#bd9651', '#73a1b6', '#829977'];
-const PERSON_POSITIONS = [
-  [-1.72, 0.68, 1.05], [0.10, 1.55, 0.80], [1.58, 0.82, 0.94],
-  [1.53, -0.90, 1.02], [-0.48, -1.39, 1.09], [-1.76, -0.64, 0.69],
-  [0.32, 0.06, 1.97], [0.05, -0.57, -1.68],
+type PersonPoint = {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  distance: number;
+  opacity: number;
+  inFrame: boolean;
+};
+type SharedEdge = { a: number; b: number; strength: number };
+type LabelMap = Map<string, HTMLButtonElement>;
+
+const GROUP_COLORS = ["#168f8d", "#a394c7", "#bd9651", "#73a1b6", "#829977"];
+// Rank determines position: the strongest match starts at the top/front.
+const PERSON_POSITIONS: [number, number, number][] = [
+  [-0.28, 1.36, 1.14],
+  [-1.42, 0.46, 0.92],
+  [1.33, 0.65, 0.75],
+  [0.25, -0.16, 1.63],
+  [-0.91, -1.1, 0.72],
+  [1.16, -1.06, 0.48],
+  [-0.63, 0.94, -1.24],
+  [1.52, -0.13, -0.9],
+  [-1.41, -0.61, -0.79],
+  [0.41, -1.44, -0.73],
+  [0.76, 1.33, -0.62],
+  [-0.05, -0.31, -1.64],
 ];
 
-function seededRandom(seed: number) {
-  let value = seed;
-  return () => {
-    value = (value * 1664525 + 1013904223) >>> 0;
-    return value / 4294967296;
-  };
-}
-
-function personPosition(index: number) {
-  if (index < PERSON_POSITIONS.length) return new THREE.Vector3(...PERSON_POSITIONS[index] as [number, number, number]);
-  const random = seededRandom(index * 149 + 73);
-  const azimuth = random() * Math.PI * 2;
-  const polar = Math.acos(random() * 2 - 1);
-  const radius = 1.22 + random() * 0.67;
-  return new THREE.Vector3(Math.sin(polar) * Math.cos(azimuth), Math.cos(polar), Math.sin(polar) * Math.sin(azimuth)).multiplyScalar(radius);
+function personPosition(index: number, count: number) {
+  if (count === 1) return new THREE.Vector3(0, 0.2, 0.75);
+  if (count === 2)
+    return new THREE.Vector3(
+      index ? 0.94 : -0.86,
+      index ? -0.57 : 0.69,
+      index ? 0.25 : 0.8,
+    );
+  if (index < PERSON_POSITIONS.length)
+    return new THREE.Vector3(...PERSON_POSITIONS[index]);
+  const angle = index * Math.PI * (3 - Math.sqrt(5));
+  const y = 1 - (2 * (index + 0.5)) / count;
+  const radius = Math.sqrt(1 - y * y);
+  return new THREE.Vector3(
+    Math.cos(angle) * radius,
+    y,
+    Math.sin(angle) * radius,
+  ).multiplyScalar(1.65);
 }
 
 function matchesGroup(person: AtlasPerson, activeGroup: number | null) {
-  return activeGroup === null || (person.groups ?? [person.group]).includes(activeGroup);
+  return (
+    activeGroup === null ||
+    (person.groups ?? [person.group]).includes(activeGroup)
+  );
 }
 
 function personLabel(person: AtlasPerson, people: AtlasPerson[]) {
-  const [first, last] = person.name.split(' ');
-  return last && people.some((other) => other.id !== person.id && other.name.split(' ')[0] === first)
-    ? `${first} ${last[0]}.` : first;
+  const [first, last] = person.name.split(" ");
+  return last &&
+    people.some(
+      (other) => other.id !== person.id && other.name.split(" ")[0] === first,
+    )
+    ? `${first} ${last[0]}.`
+    : first;
 }
 
-function makeConstellation() {
-  const random = seededRandom(2031);
-  const centers = [
-    new THREE.Vector3(-1.1, 0.60, 0.40), new THREE.Vector3(0.36, 1.02, -0.40),
-    new THREE.Vector3(1.13, -0.04, 0.26), new THREE.Vector3(-0.13, -0.97, 0.43),
-    new THREE.Vector3(-0.83, -0.34, -0.93),
-  ];
-  const nodes: { position: THREE.Vector3; group: number; size: number }[] = [];
-  centers.forEach((center, group) => {
-    for (let index = 0; index < 37; index += 1) {
-      const azimuth = random() * Math.PI * 2;
-      const polar = Math.acos(2 * random() - 1);
-      const radius = Math.pow(random(), 0.55) * 1.04;
-      const position = new THREE.Vector3(
-        Math.sin(polar) * Math.cos(azimuth), Math.cos(polar), Math.sin(polar) * Math.sin(azimuth),
-      ).multiplyScalar(radius).add(center);
-      nodes.push({ position, group, size: 0.015 + random() * 0.024 });
-    }
-  });
-  const edges: [number, number][] = [];
-  nodes.forEach((node, index) => {
-    const nearest = nodes.map((other, otherIndex) => ({
-      index: otherIndex, distance: node.position.distanceToSquared(other.position),
-    })).filter((other) => other.index !== index)
-      .sort((a, b) => a.distance - b.distance).slice(0, 4);
-    nearest.forEach((other) => {
-      if (other.index > index) edges.push([index, other.index]);
+function sharedStrength(a: AtlasPerson, b: AtlasPerson) {
+  if (a.sharedConceptIds !== undefined || b.sharedConceptIds !== undefined) {
+    const otherIds = new Set(b.sharedConceptIds ?? []);
+    return [...new Set(a.sharedConceptIds ?? [])].filter((id) =>
+      otherIds.has(id),
+    ).length;
+  }
+  const otherGroups = new Set(b.groups ?? [b.group]);
+  return [...new Set(a.groups ?? [a.group])].filter((group) =>
+    otherGroups.has(group),
+  ).length;
+}
+
+function meaningfulEdges(people: AtlasPerson[]): SharedEdge[] {
+  const candidates: SharedEdge[] = [];
+  people.forEach((person, a) => {
+    people.slice(a + 1).forEach((other, offset) => {
+      const strength = sharedStrength(person, other);
+      if (strength) candidates.push({ a, b: a + offset + 1, strength });
     });
   });
-  return { nodes, edges };
+  candidates.sort(
+    (a, b) => b.strength - a.strength || a.b - a.a - (b.b - b.a) || a.a - b.a,
+  );
+  // A strongest-overlap spanning forest connects people without drawing every possible pair.
+  const components = people.map((_, index) => index);
+  const root = (index: number): number =>
+    components[index] === index ? index : root(components[index]);
+  const edges: SharedEdge[] = [];
+  candidates.forEach((edge) => {
+    const a = root(edge.a);
+    const b = root(edge.b);
+    if (a === b) return;
+    components[a] = b;
+    edges.push(edge);
+  });
+  return edges;
 }
 
-const constellation = makeConstellation();
+function fitDistance(width: number, height: number) {
+  return Math.max(6.35, 5.1 / (width / height));
+}
 
-function StaticAtlas({ people, selectedId, onSelect, activeGroup, gradientId }: {
+function projectPerson(
+  id: string,
+  position: THREE.Vector3,
+  camera: THREE.PerspectiveCamera,
+  width: number,
+  height: number,
+  radius: number,
+  subdued: boolean,
+): PersonPoint {
+  const projected = position.clone().project(camera);
+  const cameraSpace = position.clone().applyMatrix4(camera.matrixWorldInverse);
+  const front = position.dot(camera.position.clone().normalize()) / 1.8;
+  const opacity =
+    THREE.MathUtils.smoothstep(front, -0.65, 0.78) * (subdued ? 0.25 : 1);
+  const x = (projected.x * 0.5 + 0.5) * width;
+  const y = (-projected.y * 0.5 + 0.5) * height;
+  return {
+    id,
+    x,
+    y,
+    opacity,
+    radius:
+      (radius * height * camera.zoom) /
+      (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * -cameraSpace.z),
+    distance: camera.position.distanceTo(position),
+    inFrame:
+      projected.z > -1 &&
+      projected.z < 1 &&
+      x > 12 &&
+      x < width - 12 &&
+      y > 12 &&
+      y < height - 12,
+  };
+}
+
+function positionLabels(
+  points: PersonPoint[],
+  labels: LabelMap,
+  width: number,
+  height: number,
+) {
+  const occupied: { x: number; y: number; width: number; height: number }[] =
+    [];
+  const sorted = [...points].sort((a, b) => a.distance - b.distance);
+  const limit = width < 440 ? 4 : 6;
+  sorted.forEach((point, index) => {
+    const label = labels.get(point.id);
+    if (!label) return;
+    let opacity = 0;
+    const occluded = sorted
+      .slice(0, index)
+      .some(
+        (nearer) =>
+          nearer.inFrame &&
+          Math.hypot(nearer.x - point.x, nearer.y - point.y) <
+            nearer.radius + point.radius * 0.4,
+      );
+    if (
+      point.inFrame &&
+      point.opacity > 0.13 &&
+      !occluded &&
+      occupied.length < limit
+    ) {
+      const labelWidth = label.offsetWidth;
+      const labelHeight = label.offsetHeight;
+      const gap = point.radius + 8;
+      const right = [gap, -labelHeight / 2];
+      const left = [-labelWidth - gap, -labelHeight / 2];
+      const offsets = point.x > width * 0.64 ? [left, right] : [right, left];
+      offsets.push(
+        [-labelWidth / 2, gap],
+        [-labelWidth / 2, -labelHeight - gap],
+      );
+      const position = offsets
+        .map(([offsetX, offsetY]) => ({
+          x: point.x + offsetX,
+          y: point.y + offsetY,
+          width: labelWidth,
+          height: labelHeight,
+        }))
+        .find(
+          (option) =>
+            option.x > 8 &&
+            option.y > 8 &&
+            option.x + option.width < width - 8 &&
+            option.y + option.height < height - 8 &&
+            !occupied.some(
+              (other) =>
+                option.x < other.x + other.width + 7 &&
+                option.x + option.width + 7 > other.x &&
+                option.y < other.y + other.height + 7 &&
+                option.y + option.height + 7 > other.y,
+            ) &&
+            !points.some(
+              (other) =>
+                other.id !== point.id &&
+                other.inFrame &&
+                other.x + other.radius > option.x - 4 &&
+                other.x - other.radius < option.x + option.width + 4 &&
+                other.y + other.radius > option.y - 4 &&
+                other.y - other.radius < option.y + option.height + 4,
+            ),
+        );
+      if (position) {
+        occupied.push(position);
+        label.style.left = `${position.x}px`;
+        label.style.top = `${position.y}px`;
+        opacity = point.opacity;
+      }
+    }
+    label.style.opacity = `${opacity}`;
+    label.dataset.depth = point.distance.toFixed(3);
+    label.style.zIndex = `${sorted.length - index + 1}`;
+    label.style.pointerEvents = opacity > 0.25 ? "auto" : "none";
+    label.tabIndex = opacity > 0.25 ? 0 : -1;
+    label.setAttribute("aria-hidden", opacity > 0.25 ? "false" : "true");
+  });
+}
+
+function PersonLabels({
+  people,
+  selectedId,
+  onSelect,
+  labels,
+}: {
   people: AtlasPerson[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  activeGroup: number | null;
-  gradientId: string;
+  labels: LabelMap;
 }) {
-  const toPoint = (position: THREE.Vector3) => ({ x: 375 + position.x * 99, y: 209 - position.y * 99 });
   return (
-    <div className="atlas-fallback">
-      <svg viewBox="0 0 750 420" preserveAspectRatio="none" role="img" aria-label="Campus constellation of people and shared interests">
+    <div className="atlas-labels">
+      {people.map((person) => (
+        <button
+          key={person.id}
+          ref={(element) => {
+            if (element) labels.set(person.id, element);
+            else labels.delete(person.id);
+          }}
+          type="button"
+          data-person-id={person.id}
+          tabIndex={-1}
+          className={`atlas-person ${selectedId === person.id ? "atlas-person-selected" : ""}`}
+          onClick={() => onSelect(person.id)}
+          aria-label={`Explore ${person.name}'s connections`}
+          aria-pressed={selectedId === person.id}
+        >
+          <span
+            className="atlas-person-initials"
+            style={{ color: GROUP_COLORS[person.group % GROUP_COLORS.length] }}
+          >
+            {person.initials}
+          </span>
+          <span>{personLabel(person, people)}</span>
+          {selectedId === person.id && (
+            <span className="atlas-person-dot" aria-hidden="true" />
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StaticAtlas({
+  people,
+  selectedId,
+  onSelect,
+  activeGroup,
+  zoom,
+  gradientId,
+}: NetworkAtlasProps & { gradientId: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const labelsRef = useRef<LabelMap>(new Map());
+  const [size, setSize] = useState({ width: 500, height: 450 });
+  const edges = useMemo(() => meaningfulEdges(people), [people]);
+  const camera = new THREE.PerspectiveCamera(
+    43,
+    size.width / size.height,
+    0.1,
+    80,
+  );
+  camera.position.set(0, 0, fitDistance(size.width, size.height));
+  camera.zoom = Math.max(0.7, Math.min(1.6, zoom));
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld();
+  const points = people.map((person, index) =>
+    projectPerson(
+      person.id,
+      personPosition(index, people.length),
+      camera,
+      size.width,
+      size.height,
+      selectedId === person.id ? 0.155 : 0.12,
+      !matchesGroup(person, activeGroup),
+    ),
+  );
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() =>
+      setSize({
+        width: Math.max(1, container.clientWidth),
+        height: Math.max(1, container.clientHeight),
+      }),
+    );
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    positionLabels(points, labelsRef.current, size.width, size.height);
+  });
+
+  return (
+    <div ref={containerRef} className="atlas-fallback">
+      <svg
+        viewBox={`0 0 ${size.width} ${size.height}`}
+        role="img"
+        aria-label={`${people.length} matching people; lines show shared interests`}
+      >
         <defs>
-          <radialGradient id={gradientId} cx="35%" cy="25%">
+          <radialGradient id={gradientId} cx="28%" cy="22%" r="80%">
             <stop offset="0%" stopColor="#ffffff" />
-            <stop offset="65%" stopColor="#d0e8e3" />
-            <stop offset="100%" stopColor="#94c4bd" />
+            <stop offset="42%" stopColor="#e0f0e9" />
+            <stop offset="100%" stopColor="#83b8ad" />
           </radialGradient>
         </defs>
-        <g fill="none" stroke="#6ba99f" strokeWidth="0.7" opacity="0.5">
-          <ellipse cx="375" cy="210" rx="245" ry="158" transform="rotate(-24 375 210)" />
-          <ellipse cx="375" cy="210" rx="225" ry="86" transform="rotate(37 375 210)" />
-          <ellipse cx="375" cy="210" rx="211" ry="78" transform="rotate(-73 375 210)" />
-        </g>
-        <g stroke="#579a8d" strokeWidth="0.65" opacity="0.48">
-          {constellation.edges.map(([a, b]) => {
-            const start = toPoint(constellation.nodes[a].position);
-            const end = toPoint(constellation.nodes[b].position);
-            return <line key={`${a}-${b}`} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
-          })}
-        </g>
-        {constellation.nodes.map((node, index) => {
-          const point = toPoint(node.position);
-          return <circle key={index} cx={point.x} cy={point.y} r={node.size * 80} fill={GROUP_COLORS[node.group]} opacity="0.45" />;
-        })}
-        {people.map((person, index) => {
-          const point = toPoint(personPosition(index));
-          const selected = selectedId === person.id;
-          return <g key={person.id} opacity={matchesGroup(person, activeGroup) ? 1 : 0.3}>
-            <circle cx={point.x} cy={point.y} r={selected ? 15 : index < 7 ? 11 : 5} fill={selected ? '#0b8c85' : `url(#${gradientId})`} stroke={selected ? '#d8ffff' : '#ffffff'} strokeWidth="1.5" />
-            {selected && <circle cx={point.x} cy={point.y} r="22" fill="none" stroke="#169890" opacity="0.35" />}
-          </g>;
-        })}
+        {edges.map(({ a, b }) => (
+          <line
+            key={`${people[a].id}-${people[b].id}`}
+            x1={points[a].x}
+            y1={points[a].y}
+            x2={points[b].x}
+            y2={points[b].y}
+            stroke="#79a99b"
+            strokeWidth="0.85"
+            opacity={
+              0.12 + Math.min(points[a].opacity, points[b].opacity) * 0.23
+            }
+          />
+        ))}
+        {[...points]
+          .sort((a, b) => b.distance - a.distance)
+          .map((point) => (
+            <g
+              key={point.id}
+              opacity={0.2 + point.opacity * 0.8}
+              onClick={() => onSelect(point.id)}
+              className="atlas-fallback-node"
+            >
+              {selectedId === point.id && (
+                <circle
+                  cx={point.x}
+                  cy={point.y}
+                  r={point.radius + 6}
+                  fill="none"
+                  stroke="#168f87"
+                  opacity="0.3"
+                />
+              )}
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={point.radius}
+                fill={
+                  selectedId === point.id ? "#329e90" : `url(#${gradientId})`
+                }
+                stroke="#ffffff"
+                strokeWidth="1"
+              />
+            </g>
+          ))}
       </svg>
-      <div className="atlas-fallback-labels">
-        {people.map((person, index) => {
-          if (index >= 7 && selectedId !== person.id) return null;
-          const point = toPoint(personPosition(index));
-          return <button
-            key={person.id}
-            type="button"
-            className={`atlas-person ${selectedId === person.id ? 'atlas-person-selected' : ''}`}
-            style={{ left: `${point.x / 7.5}%`, top: `${point.y / 4.2}%`, opacity: matchesGroup(person, activeGroup) ? 1 : 0.32 }}
-            onClick={() => onSelect(person.id)}
-            aria-label={`Explore ${person.name}'s connections`}
-            aria-pressed={selectedId === person.id}
-          >
-            <span className="atlas-person-initials" style={{ color: GROUP_COLORS[person.group % GROUP_COLORS.length] }}>{person.initials}</span>
-            <span>{personLabel(person, people)}</span>
-          </button>;
-        })}
-      </div>
+      <PersonLabels
+        people={people}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        labels={labelsRef.current}
+      />
     </div>
   );
 }
 
 export function NetworkAtlas(props: NetworkAtlasProps) {
-  const { people, selectedId, onSelect, activeGroup, still, zoom } = props;
+  const { people, selectedId, activeGroup, still, zoom } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasMountRef = useRef<HTMLDivElement>(null);
-  const labelsRef = useRef(new Map<string, HTMLButtonElement>());
+  const labelsRef = useRef<LabelMap>(new Map());
   const latestRef = useRef(props);
   const refreshRef = useRef<() => void>(() => {});
   const [webglReady, setWebglReady] = useState(false);
-  const gradientId = useId().replace(/:/g, '');
+  const gradientId = useId().replace(/:/g, "");
   latestRef.current = props;
-  const signature = people.map((person) => `${person.id}:${person.group}:${person.groups?.join(',') ?? ''}`).join('|');
-  const displayedPeople = useMemo(() => {
-    const displayed = people.slice(0, 7);
-    const selected = people.find((person) => person.id === selectedId);
-    if (selected && !displayed.includes(selected)) displayed.push(selected);
-    return displayed;
-  }, [people, selectedId]);
+  const signature = JSON.stringify(
+    people.map(({ id, group, groups, sharedConceptIds, score }) => [
+      id,
+      group,
+      groups,
+      sharedConceptIds,
+      score,
+    ]),
+  );
 
   useEffect(() => {
     const container = containerRef.current;
@@ -178,7 +448,11 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
 
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
+      renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true,
+        powerPreference: "low-power",
+      });
     } catch {
       setWebglReady(false);
       return;
@@ -186,197 +460,156 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
 
     let disposed = false;
     let visible = true;
+    let contextAvailable = true;
     let animationFrame = 0;
     let previousTime = 0;
     let width = 1;
     let height = 1;
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 80);
-    camera.position.set(0, 0.05, 6.15);
+    camera.position.set(0, 0, 6.35);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
     renderer.setClearColor(0xffffff, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.04;
-    renderer.domElement.setAttribute('aria-hidden', 'true');
+    renderer.toneMappingExposure = 1.08;
+    renderer.domElement.setAttribute("aria-hidden", "true");
     mount.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableZoom = false;
     controls.enablePan = false;
     controls.enableDamping = false;
-    controls.rotateSpeed = 0.42;
-    controls.minPolarAngle = Math.PI * 0.22;
-    controls.maxPolarAngle = Math.PI * 0.78;
+    controls.rotateSpeed = 0.48;
+    controls.minPolarAngle = Math.PI * 0.16;
+    controls.maxPolarAngle = Math.PI * 0.84;
     controls.touches.ONE = THREE.TOUCH.ROTATE;
     controls.touches.TWO = THREE.TOUCH.ROTATE;
 
-    scene.add(new THREE.AmbientLight(0xcdf6ef, 1.3));
-    const keyLight = new THREE.DirectionalLight(0xffffff, 3.8);
+    scene.add(new THREE.AmbientLight(0xe4fff3, 1.8));
+    const keyLight = new THREE.DirectionalLight(0xffffff, 4.5);
     keyLight.position.set(-4, 5, 6);
     scene.add(keyLight);
-    const rimLight = new THREE.DirectionalLight(0x81c6c2, 1.9);
+    const rimLight = new THREE.DirectionalLight(0x60aa98, 2.2);
     rimLight.position.set(5, -2, -3);
     scene.add(rimLight);
 
     const network = new THREE.Group();
-    network.rotation.z = -0.075;
     scene.add(network);
-    const resources: (THREE.BufferGeometry | THREE.Material | THREE.Texture)[] = [];
-    const sphereGeometry = new THREE.SphereGeometry(1, 18, 14);
-    resources.push(sphereGeometry);
-    const dustMaterial = new THREE.MeshPhysicalMaterial({
-      color: '#a8cfc2', roughness: 0.26, metalness: 0.08, clearcoat: 1,
-      transparent: true, opacity: 0.95,
-    });
-    resources.push(dustMaterial);
-    const dust = new THREE.InstancedMesh(sphereGeometry, dustMaterial, constellation.nodes.length);
-    const matrix = new THREE.Matrix4();
-    const quaternion = new THREE.Quaternion();
-    constellation.nodes.forEach((node, index) => {
-      matrix.compose(node.position, quaternion, new THREE.Vector3(node.size, node.size, node.size));
-      dust.setMatrixAt(index, matrix);
-      dust.setColorAt(index, new THREE.Color(GROUP_COLORS[node.group]).lerp(new THREE.Color('#d8f4e9'), 0.44));
-    });
-    network.add(dust);
-
-    const edgePositions: number[] = [];
-    constellation.edges.forEach(([a, b]) => {
-      edgePositions.push(...constellation.nodes[a].position.toArray(), ...constellation.nodes[b].position.toArray());
-    });
-    const edgeGeometry = new THREE.BufferGeometry();
-    edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
-    const edgeMaterial = new THREE.LineBasicMaterial({ color: '#4d9487', transparent: true, opacity: 0.3, depthWrite: false });
-    resources.push(edgeGeometry, edgeMaterial);
-    network.add(new THREE.LineSegments(edgeGeometry, edgeMaterial));
-
-    const orbitSettings = [
-      { radius: 2.37, x: 1.02, y: 0.18, z: -0.40, opacity: 0.36 },
-      { radius: 2.22, x: 0.71, y: 1.16, z: 0.72, opacity: 0.3 },
-      { radius: 2.43, x: 1.57, y: 0.56, z: -0.53, opacity: 0.27 },
-    ];
-    orbitSettings.forEach((orbit, index) => {
-      const points = Array.from({ length: 161 }, (_, step) => {
-        const angle = step / 160 * Math.PI * 2;
-        return new THREE.Vector3(Math.cos(angle) * orbit.radius, Math.sin(angle) * orbit.radius, 0);
-      });
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({ color: index === 1 ? '#c6b88c' : '#56a29a', transparent: true, opacity: orbit.opacity, depthWrite: false });
-      const line = new THREE.Line(geometry, material);
-      line.rotation.set(orbit.x, orbit.y, orbit.z);
-      network.add(line);
-      resources.push(geometry, material);
-      const satelliteMaterial = new THREE.MeshPhysicalMaterial({ color: index === 1 ? '#dfcea4' : '#b7d8d3', roughness: 0.22, metalness: 0.12 });
-      const satellite = new THREE.Mesh(sphereGeometry, satelliteMaterial);
-      satellite.scale.setScalar(0.055);
-      satellite.position.copy(points[24 + index * 41]).applyEuler(line.rotation);
-      network.add(satellite);
-      resources.push(satelliteMaterial);
-    });
-
-    const haloCanvas = document.createElement('canvas');
-    haloCanvas.width = 128;
-    haloCanvas.height = 128;
-    const context = haloCanvas.getContext('2d');
-    if (context) {
-      const gradient = context.createRadialGradient(64, 64, 4, 64, 64, 64);
-      gradient.addColorStop(0, 'rgba(37, 173, 154, 0.40)');
-      gradient.addColorStop(0.4, 'rgba(80, 184, 165, 0.13)');
-      gradient.addColorStop(1, 'rgba(80, 184, 165, 0)');
-      context.fillStyle = gradient;
-      context.fillRect(0, 0, 128, 128);
-    }
-    const haloTexture = new THREE.CanvasTexture(haloCanvas);
-    resources.push(haloTexture);
+    const resources: (THREE.BufferGeometry | THREE.Material)[] = [];
+    const sphereGeometry = new THREE.SphereGeometry(1, 32, 24);
+    const ringGeometry = new THREE.RingGeometry(1.48, 1.54, 48);
+    resources.push(sphereGeometry, ringGeometry);
     const personMeshes = latestRef.current.people.map((person, index) => {
       const material = new THREE.MeshPhysicalMaterial({
-        color: '#e3f2e7', roughness: 0.19, metalness: 0.09, clearcoat: 1,
-        clearcoatRoughness: 0.18, transparent: true, opacity: 1,
+        color: "#d6e8df",
+        roughness: 0.21,
+        metalness: 0.08,
+        clearcoat: 1,
+        clearcoatRoughness: 0.14,
+        transparent: true,
       });
       const mesh = new THREE.Mesh(sphereGeometry, material);
-      mesh.scale.setScalar(0.115);
-      mesh.position.copy(personPosition(index));
+      mesh.position.copy(
+        personPosition(index, latestRef.current.people.length),
+      );
       mesh.userData.personId = person.id;
       network.add(mesh);
-      const haloMaterial = new THREE.SpriteMaterial({ map: haloTexture, transparent: true, opacity: 0.65, depthWrite: false });
-      const halo = new THREE.Sprite(haloMaterial);
-      halo.position.copy(mesh.position);
-      halo.scale.set(0.78, 0.78, 1);
-      network.add(halo);
-      const nearest = constellation.nodes.map((node, nodeIndex) => ({ nodeIndex, distance: node.position.distanceToSquared(mesh.position) }))
-        .sort((a, b) => a.distance - b.distance).slice(0, 8);
-      const positions: number[] = [];
-      nearest.forEach(({ nodeIndex }) => positions.push(...mesh.position.toArray(), ...constellation.nodes[nodeIndex].position.toArray()));
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const lineMaterial = new THREE.LineBasicMaterial({ color: '#279e90', transparent: true, opacity: 0.24, depthWrite: false });
-      network.add(new THREE.LineSegments(geometry, lineMaterial));
-      resources.push(material, haloMaterial, geometry, lineMaterial);
-      return { person, mesh, material, halo, haloMaterial, lineMaterial, index };
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: "#178e80",
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.position.copy(mesh.position);
+      ring.scale.setScalar(0.155);
+      network.add(ring);
+      resources.push(material, ringMaterial);
+      return { person, mesh, material, ring, ringMaterial };
     });
 
-    const projected = new THREE.Vector3();
+    const strands = meaningfulEdges(latestRef.current.people).map(
+      ({ a, b, strength }) => {
+        const geometry = new THREE.BufferGeometry().setFromPoints([
+          personMeshes[a].mesh.position,
+          personMeshes[b].mesh.position,
+        ]);
+        const material = new THREE.LineBasicMaterial({
+          color: "#79a99b",
+          transparent: true,
+          opacity: 0.26,
+          depthWrite: false,
+        });
+        network.add(new THREE.Line(geometry, material));
+        resources.push(geometry, material);
+        return { a, b, strength, material };
+      },
+    );
+
     const worldPosition = new THREE.Vector3();
     const render = () => {
-      if (disposed || !visible) return;
+      if (disposed || !visible || !contextAvailable) return;
       const current = latestRef.current;
-      const currentZoom = Math.max(0.7, Math.min(1.6, current.zoom));
-      camera.zoom = currentZoom;
+      camera.zoom = Math.max(0.7, Math.min(1.6, current.zoom));
       camera.updateProjectionMatrix();
+      camera.updateMatrixWorld();
       network.updateMatrixWorld(true);
-      const labelPlacements: { label: HTMLButtonElement; x: number; y: number; selected: boolean; subdued: boolean }[] = [];
-      personMeshes.forEach(({ person, mesh, material, halo, haloMaterial, lineMaterial, index }) => {
-        const selected = current.selectedId === person.id;
-        const subdued = !matchesGroup(person, current.activeGroup);
-        material.color.set(selected ? '#168f87' : '#deeee3');
-        material.opacity = subdued ? 0.28 : 1;
-        mesh.scale.setScalar(selected ? 0.14 : index < 7 ? 0.1 : 0.048 + index % 3 * 0.009);
-        haloMaterial.opacity = subdued ? 0.08 : selected ? 1 : 0.42;
-        halo.scale.setScalar(selected ? 1.08 : 0.67);
-        lineMaterial.opacity = subdued ? 0.06 : selected ? 0.58 : 0.2;
-        const label = labelsRef.current.get(person.id);
-        if (label) {
+      const points = personMeshes.map(
+        ({ person, mesh, material, ring, ringMaterial }) => {
+          const selected = current.selectedId === person.id;
+          const subdued = !matchesGroup(person, current.activeGroup);
+          const radius = selected ? 0.155 : 0.12;
           mesh.getWorldPosition(worldPosition);
-          projected.copy(worldPosition).project(camera);
-          const x = (projected.x * 0.5 + 0.5) * width;
-          const y = (-projected.y * 0.5 + 0.5) * height;
-          const inFrame = projected.z < 1 && x > 8 && x < width - 8 && y > 8 && y < height - 8;
-          label.style.opacity = inFrame ? subdued ? '0.3' : '1' : '0';
-          label.style.visibility = inFrame ? 'visible' : 'hidden';
-          label.style.zIndex = selected ? '5' : `${Math.round(2 + (1 - projected.z))}`;
-          if (inFrame) labelPlacements.push({ label, x, y, selected, subdued });
-        }
+          const point = projectPerson(
+            person.id,
+            worldPosition,
+            camera,
+            width,
+            height,
+            radius,
+            subdued,
+          );
+          material.color.set(selected ? "#228f81" : "#d6e8df");
+          material.opacity = 0.18 + point.opacity * 0.82;
+          mesh.scale.setScalar(radius);
+          ring.visible = selected;
+          ringMaterial.opacity = point.opacity * 0.35;
+          ring.quaternion.copy(
+            network.quaternion.clone().invert().multiply(camera.quaternion),
+          );
+          return point;
+        },
+      );
+      strands.forEach(({ a, b, strength, material }) => {
+        const selected =
+          current.selectedId === personMeshes[a].person.id ||
+          current.selectedId === personMeshes[b].person.id;
+        material.opacity =
+          (selected ? 0.19 : 0.1) +
+          Math.min(points[a].opacity, points[b].opacity) *
+            Math.min(0.28, 0.15 + strength * 0.025);
+        material.color.set(selected ? "#3e9e89" : "#79a99b");
       });
-      const occupied: { x: number; y: number; width: number; height: number }[] = [];
-      labelPlacements.sort((a, b) => Number(b.selected) - Number(a.selected) || Number(a.subdued) - Number(b.subdued));
-      labelPlacements.forEach(({ label, x, y }) => {
-        const labelWidth = label.offsetWidth;
-        const labelHeight = label.offsetHeight;
-        const offsets = [[15, -labelHeight / 2], [-labelWidth - 15, -labelHeight / 2], [15, 20], [15, -labelHeight - 20], [-labelWidth - 15, 20], [-labelWidth - 15, -labelHeight - 20]];
-        const options = offsets.map(([offsetX, offsetY]) => ({
-          x: Math.max(9, Math.min(width - labelWidth - 9, x + offsetX)),
-          y: Math.max(7, Math.min(height - labelHeight - 7, y + offsetY)),
-          width: labelWidth,
-          height: labelHeight,
-        }));
-        const position = options.find((option) => !occupied.some((other) => (
-          option.x < other.x + other.width + 5 && option.x + option.width + 5 > other.x
-          && option.y < other.y + other.height + 5 && option.y + option.height + 5 > other.y
-        ))) ?? options[0];
-        occupied.push(position);
-        label.style.left = `${position.x}px`;
-        label.style.top = `${position.y}px`;
-      });
+      positionLabels(points, labelsRef.current, width, height);
       renderer.render(scene, camera);
     };
-    const shouldAnimate = () => visible && !document.hidden && !latestRef.current.still && !reducedMotion.matches;
+    const shouldAnimate = () =>
+      visible &&
+      contextAvailable &&
+      !document.hidden &&
+      !latestRef.current.still &&
+      !reducedMotion.matches;
     const tick = (time: number) => {
       animationFrame = 0;
       if (!shouldAnimate() || disposed) return;
-      const delta = previousTime ? Math.min((time - previousTime) / 1000, 0.05) : 0;
+      const delta = previousTime
+        ? Math.min((time - previousTime) / 1000, 0.05)
+        : 0;
       previousTime = time;
-      network.rotation.y += delta * 0.028;
+      network.rotation.y += delta * 0.021;
       render();
       animationFrame = requestAnimationFrame(tick);
     };
@@ -391,26 +624,29 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       }
     };
     refreshRef.current = refresh;
-    controls.addEventListener('change', render);
+    controls.addEventListener("change", render);
 
     const resize = () => {
       width = Math.max(1, container.clientWidth);
       height = Math.max(1, container.clientHeight);
       camera.aspect = width / height;
-      camera.position.setLength(width / height < 1.25 ? 8.6 : 6.15);
+      camera.position.setLength(fitDistance(width, height));
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
       refresh();
     };
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(container);
-    const visibilityObserver = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      refresh();
-    }, { threshold: 0.01 });
+    const visibilityObserver = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+        refresh();
+      },
+      { threshold: 0.01 },
+    );
     visibilityObserver.observe(container);
-    document.addEventListener('visibilitychange', refresh);
-    reducedMotion.addEventListener('change', refresh);
+    document.addEventListener("visibilitychange", refresh);
+    reducedMotion.addEventListener("change", refresh);
 
     const raycaster = new THREE.Raycaster();
     const pointerStart = { x: 0, y: 0 };
@@ -419,22 +655,43 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       pointerStart.y = event.clientY;
     };
     const pointerUp = (event: PointerEvent) => {
-      if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 5) return;
+      if (
+        Math.hypot(
+          event.clientX - pointerStart.x,
+          event.clientY - pointerStart.y,
+        ) > 5
+      )
+        return;
       const bounds = renderer.domElement.getBoundingClientRect();
-      const pointer = new THREE.Vector2((event.clientX - bounds.left) / bounds.width * 2 - 1, -(event.clientY - bounds.top) / bounds.height * 2 + 1);
+      const pointer = new THREE.Vector2(
+        ((event.clientX - bounds.left) / bounds.width) * 2 - 1,
+        (-(event.clientY - bounds.top) / bounds.height) * 2 + 1,
+      );
       raycaster.setFromCamera(pointer, camera);
-      const hit = raycaster.intersectObjects(personMeshes.map(({ mesh }) => mesh))[0];
-      if (hit) latestRef.current.onSelect(hit.object.userData.personId as string);
+      const hit = raycaster.intersectObjects(
+        personMeshes.map(({ mesh }) => mesh),
+      )[0];
+      if (hit)
+        latestRef.current.onSelect(hit.object.userData.personId as string);
     };
     const contextLost = (event: Event) => {
       event.preventDefault();
-      visible = false;
-      cancelAnimationFrame(animationFrame);
+      contextAvailable = false;
+      refresh();
       setWebglReady(false);
     };
-    renderer.domElement.addEventListener('pointerdown', pointerDown);
-    renderer.domElement.addEventListener('pointerup', pointerUp);
-    renderer.domElement.addEventListener('webglcontextlost', contextLost);
+    const contextRestored = () => {
+      contextAvailable = true;
+      setWebglReady(true);
+      refresh();
+    };
+    renderer.domElement.addEventListener("pointerdown", pointerDown);
+    renderer.domElement.addEventListener("pointerup", pointerUp);
+    renderer.domElement.addEventListener("webglcontextlost", contextLost);
+    renderer.domElement.addEventListener(
+      "webglcontextrestored",
+      contextRestored,
+    );
     resize();
     setWebglReady(true);
 
@@ -444,13 +701,17 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
       cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       visibilityObserver.disconnect();
-      document.removeEventListener('visibilitychange', refresh);
-      reducedMotion.removeEventListener('change', refresh);
-      controls.removeEventListener('change', render);
+      document.removeEventListener("visibilitychange", refresh);
+      reducedMotion.removeEventListener("change", refresh);
+      controls.removeEventListener("change", render);
       controls.dispose();
-      renderer.domElement.removeEventListener('pointerdown', pointerDown);
-      renderer.domElement.removeEventListener('pointerup', pointerUp);
-      renderer.domElement.removeEventListener('webglcontextlost', contextLost);
+      renderer.domElement.removeEventListener("pointerdown", pointerDown);
+      renderer.domElement.removeEventListener("pointerup", pointerUp);
+      renderer.domElement.removeEventListener("webglcontextlost", contextLost);
+      renderer.domElement.removeEventListener(
+        "webglcontextrestored",
+        contextRestored,
+      );
       resources.forEach((resource) => resource.dispose());
       renderer.dispose();
       renderer.forceContextLoss();
@@ -458,31 +719,27 @@ export function NetworkAtlas(props: NetworkAtlasProps) {
     };
   }, [signature]);
 
-  useEffect(() => { refreshRef.current(); }, [selectedId, activeGroup, still, zoom, webglReady]);
+  useEffect(() => {
+    refreshRef.current();
+  }, [people, selectedId, activeGroup, still, zoom, webglReady]);
 
   return (
-    <div ref={containerRef} className={`atlas-root ${webglReady ? 'atlas-ready' : ''}`} aria-label="Interactive campus network">
+    <div
+      ref={containerRef}
+      className={`atlas-root ${webglReady ? "atlas-ready" : ""}`}
+      aria-label="Matching people in an interactive network"
+    >
       <div className="atlas-atmosphere" aria-hidden="true" />
       <div ref={canvasMountRef} className="atlas-canvas" />
-      {!webglReady && <StaticAtlas people={people} selectedId={selectedId} onSelect={onSelect} activeGroup={activeGroup} gradientId={gradientId} />}
-      {webglReady && <div className="atlas-labels">
-        {displayedPeople.map((person) => <button
-          key={person.id}
-          ref={(element) => {
-            if (element) labelsRef.current.set(person.id, element);
-            else labelsRef.current.delete(person.id);
-          }}
-          type="button"
-          className={`atlas-person ${selectedId === person.id ? 'atlas-person-selected' : ''}`}
-          onClick={() => onSelect(person.id)}
-          aria-label={`Explore ${person.name}'s connections`}
-          aria-pressed={selectedId === person.id}
-        >
-          <span className="atlas-person-initials" style={{ color: GROUP_COLORS[person.group % GROUP_COLORS.length] }}>{person.initials}</span>
-          <span>{personLabel(person, people)}</span>
-          {selectedId === person.id && <span className="atlas-person-dot" aria-hidden="true" />}
-        </button>)}
-      </div>}
+      {!webglReady && <StaticAtlas {...props} gradientId={gradientId} />}
+      {webglReady && (
+        <PersonLabels
+          people={people}
+          selectedId={selectedId}
+          onSelect={props.onSelect}
+          labels={labelsRef.current}
+        />
+      )}
     </div>
   );
 }

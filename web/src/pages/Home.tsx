@@ -1,11 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   Bookmark,
-  Check,
   ChevronRight,
   CircleHelp,
   Compass,
@@ -24,23 +22,40 @@ import {
   X,
 } from "lucide-react";
 import { api, USING_FIXTURES } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
 import { Avatar, initials } from "../components/Avatar";
 import { PersonPanel } from "../components/PersonPanel";
 import { EventPanel } from "../components/EventPanel";
 import { useReducedMotion } from "../hooks/useReducedMotion";
-import type { ConnectionSuggestion, EventSuggestion } from "../types/api";
+import type {
+  AtlasResponse,
+  ConnectionSuggestion,
+  EventSuggestion,
+} from "../types/api";
 const NetworkAtlas = lazy(() =>
   import("../components/NetworkAtlas").then((m) => ({
     default: m.NetworkAtlas,
   })),
 );
 
+const InterestGlobe = lazy(() =>
+  import("../components/InterestGlobe").then((m) => ({
+    default: m.InterestGlobe,
+  })),
+);
+const ATLAS_LIMIT = 12;
+const INTEREST_COLORS = ["#168f8d", "#a394c7", "#bd9651", "#73a1b6", "#829977"];
+
 export function Home() {
-  const { actor } = useAuth();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [suggestions, setSuggestions] = useState<ConnectionSuggestion[]>([]);
+  const [atlas, setAtlas] = useState<AtlasResponse | null>(null);
+  const [atlasFor, setAtlasFor] = useState<string | null>(null);
+  const [communitySuggestions, setCommunitySuggestions] = useState<
+    ConnectionSuggestion[]
+  >([]);
+  const [communityLoading, setCommunityLoading] = useState(false);
+  const [communityError, setCommunityError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const [events, setEvents] = useState<EventSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -71,21 +86,69 @@ export function Home() {
       return [];
     }
   });
-  const interests = actor?.topConcepts ?? [];
+  const interests = atlas?.interests ?? [];
   const interest = params.get("interest");
   const activeGroup = interests.findIndex((c) => c.conceptId === interest);
+  const activeInterest = interests.find((c) => c.conceptId === interest);
   function load() {
+    setRetry((value) => value + 1);
+  }
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(false);
-    Promise.all([api.getSuggestions(50), api.getEventSuggestions()])
-      .then(([s, e]) => {
-        setSuggestions(s);
-        setEvents(e);
+    api
+      .getAtlas(interest ?? undefined, ATLAS_LIMIT, controller.signal)
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setAtlas(response);
+        setAtlasFor(interest);
       })
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }
-  useEffect(load, []);
+      .catch(() => {
+        if (!controller.signal.aborted) setError(true);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [interest, retry]);
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getEventSuggestions()
+      .then((items) => {
+        if (!cancelled) setEvents(items);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (audience !== "societies") return;
+    let cancelled = false;
+    setCommunityLoading(true);
+    setCommunityError(false);
+    api
+      .getSuggestions(50)
+      .then((items) => {
+        if (!cancelled)
+          setCommunitySuggestions(
+            items.filter((s) => s.actor.kind !== "person"),
+          );
+      })
+      .catch(() => {
+        if (!cancelled) setCommunityError(true);
+      })
+      .finally(() => {
+        if (!cancelled) setCommunityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [audience, retry]);
   useEffect(() => {
     if (!expanded) return;
     const before = document.body.style.overflow;
@@ -95,11 +158,12 @@ export function Home() {
       if (e.key === "Tab") {
         const items = [
           ...(expandedRef.current?.querySelectorAll<HTMLElement>(
-            "button:not(:disabled), a[href]",
+            'button:not(:disabled), a[href], [tabindex="0"]',
           ) ?? []),
         ].filter(
           (el) =>
             el.getClientRects().length &&
+            el.tabIndex >= 0 &&
             getComputedStyle(el).visibility !== "hidden",
         );
         const first = items[0],
@@ -122,44 +186,64 @@ export function Home() {
       document.body.style.overflow = before;
     };
   }, [expanded]);
-  const people = suggestions.filter((s) => s.actor.kind === "person");
-  const societies = suggestions.filter((s) => s.actor.kind !== "person");
-  const visible = (audience === "societies" ? societies : people).filter(
-    (s) =>
-      !interest || s.actor.topConcepts.some((c) => c.conceptId === interest),
-  );
-  const selected =
-    visible.find((s) => s.actor.id === selectedId) ??
-    visible.find(
-      (s) => s.reasons.filter((r) => r.kind === "shared_concept").length > 1,
-    ) ??
-    visible[0];
+  // The API decides membership and ranking from complete visible interests.
+  // Never re-filter people using actor.topConcepts: that field is capped at five.
+  const people = atlasFor === interest ? (atlas?.suggestions ?? []) : [];
+  const societies = communitySuggestions;
+  const visible = audience === "societies" ? societies : people;
+  const selected = visible.find((s) => s.actor.id === selectedId) ?? visible[0];
   const cards = (
     onlySaved ? visible.filter((s) => saved.includes(s.actor.id)) : visible
   ).slice(0, 3);
   const atlasPeople = useMemo(
     () =>
-      (audience === "societies"
-        ? suggestions.filter((s) => s.actor.kind !== "person")
-        : suggestions.filter((s) => s.actor.kind === "person")
-      ).map((s) => ({
-        id: s.actor.id,
-        name: s.actor.displayName,
-        initials: initials(s.actor.displayName),
-        groups: interests.flatMap((c, i) =>
-          s.actor.topConcepts.some((a) => a.conceptId === c.conceptId)
-            ? [i]
-            : [],
-        ),
-        group: Math.max(
-          0,
-          interests.findIndex((c) =>
-            s.actor.topConcepts.some((a) => a.conceptId === c.conceptId),
-          ),
-        ),
-      })),
-    [suggestions, audience, actor],
+      visible.slice(0, ATLAS_LIMIT).map((s) => {
+        const sharedConceptIds: string[] =
+          "sharedConceptIds" in s && Array.isArray(s.sharedConceptIds)
+            ? (s.sharedConceptIds as string[])
+            : s.reasons.flatMap((r) =>
+                r.kind === "shared_concept"
+                  ? r.evidence
+                      .filter((e) => e.kind === "concept")
+                      .map((e) => e.id)
+                  : [],
+              );
+        const groups = interests.flatMap((c, i) =>
+          sharedConceptIds.includes(c.conceptId) ? [i] : [],
+        );
+        return {
+          id: s.actor.id,
+          name: s.actor.displayName,
+          initials: initials(s.actor.displayName),
+          groups,
+          group: groups[0] ?? 0,
+          sharedConceptIds,
+          score: s.score,
+        };
+      }),
+    [visible, interests],
   );
+  const globeInterests = interests.map((c, i) => ({
+    id: c.conceptId,
+    label: c.label,
+    color: INTEREST_COLORS[i % INTEREST_COLORS.length],
+    count: c.count,
+  }));
+  const selectedSharedCount =
+    selected &&
+    "sharedConceptIds" in selected &&
+    Array.isArray(selected.sharedConceptIds)
+      ? selected.sharedConceptIds.length
+      : (selected?.reasons.filter((r) => r.kind === "shared_concept").length ??
+        0);
+  const shownTotal =
+    audience === "societies"
+      ? visible.length
+      : atlasFor === interest
+        ? (atlas?.total ?? 0)
+        : 0;
+  const busy = audience === "societies" ? communityLoading : loading;
+  const viewError = audience === "societies" ? communityError : error;
   function toggleSaved(id: string) {
     setSaved((prev) => {
       const next = prev.includes(id)
@@ -174,7 +258,8 @@ export function Home() {
   function changeInterest(id: string | null) {
     const next = new URLSearchParams(params);
     id ? next.set("interest", id) : next.delete("interest");
-    setParams(next);
+    setSelectedId(null);
+    setParams(next, { replace: true });
   }
 
   return (
@@ -242,7 +327,7 @@ export function Home() {
         <div className="section-heading">
           <div className="section-title">
             <h2 id="network-title">Your world of connections</h2>
-            <span className="count-badge">{suggestions.length}</span>
+            <span className="count-badge">{atlas?.total ?? 0}</span>
           </div>
           <Link to="/view" className="text-link">
             Explore all <ArrowUpRight size={15} />
@@ -259,13 +344,13 @@ export function Home() {
                 {
                   value: "people",
                   label: "People",
-                  count: people.length,
+                  count: atlas?.total ?? 0,
                   icon: Users,
                 },
                 {
                   value: "societies",
                   label: "Labs & clubs",
-                  count: societies.length,
+                  count: societies.length || undefined,
                   icon: Layers3,
                 },
                 {
@@ -293,16 +378,22 @@ export function Home() {
           </div>
           <span className="network-tabs-note">
             <span className="status-dot" />
-            Based on your shared interests
+            {audience === "societies"
+              ? "Communities around your interests"
+              : audience === "events"
+                ? "Around your campus"
+                : activeInterest
+                  ? `Exploring ${activeInterest.label}`
+                  : "People with shared interests"}
           </span>
         </div>
-        {loading ? (
+        {loading && !atlas ? (
           <div className="network-loading">
             <span className="loading-orbit" />
             <h3>Finding your connections</h3>
             <p>A few shared interests can open a whole new world.</p>
           </div>
-        ) : error ? (
+        ) : error && !atlas ? (
           <div className="empty-state">
             <h3>Your campus could not be loaded</h3>
             <p>Check that the backend is running, then try again.</p>
@@ -353,7 +444,11 @@ export function Home() {
               <div className="atlas-heading">
                 <div>
                   <span className="atlas-eyebrow">THE CAMPUS ATLAS</span>
-                  <h3>Follow your curiosity.</h3>
+                  <h3>
+                    {audience === "people"
+                      ? "Turn an interest into a connection."
+                      : "Find a community for your curiosity."}
+                  </h3>
                 </div>
                 <button
                   className="atlas-info-button icon-button"
@@ -375,45 +470,108 @@ export function Home() {
                   </button>
                   <strong>A new perspective on your network.</strong>
                   <p>
-                    Drag to explore. Select a name to see what connects you.
-                    Positions are illustrative; the evidence panel explains each
-                    match.
+                    {audience === "people" &&
+                      "Turn the sphere on the left to choose an interest. "}
+                    Each node is one returned profile, with at most 12 shown.
+                    Lines join profiles with a shared interest. Drag the network
+                    to bring nearby names into focus; position is illustrative,
+                    while the matching evidence comes from their profiles.
                   </p>
                 </div>
               )}
-              <div className="atlas-stage">
-                <Suspense
-                  fallback={
-                    <div className="atlas-fallback-loading">
-                      Opening your atlas…
-                    </div>
-                  }
-                >
-                  <NetworkAtlas
-                    people={atlasPeople}
-                    selectedId={selected?.actor.id ?? null}
-                    onSelect={(id) => {
-                      const person = suggestions.find((s) => s.actor.id === id);
-                      if (
-                        person &&
-                        interest &&
-                        !person.actor.topConcepts.some(
-                          (c) => c.conceptId === interest,
-                        )
-                      )
-                        changeInterest(null);
-                      setSelectedId(id);
-                    }}
-                    activeGroup={activeGroup < 0 ? null : activeGroup}
-                    still={still}
-                    zoom={zoom}
-                  />
-                </Suspense>
+              <div
+                className={`atlas-explorer${audience === "societies" ? " atlas-explorer-communities" : ""}`}
+              >
+                {audience === "people" && (
+                  <div className="interest-globe-rail">
+                    <Suspense
+                      fallback={
+                        <div className="atlas-fallback-loading">
+                          Opening your interest sphere…
+                        </div>
+                      }
+                    >
+                      <InterestGlobe
+                        interests={globeInterests}
+                        activeId={interest}
+                        onChange={changeInterest}
+                        still={still}
+                      />
+                    </Suspense>
+                  </div>
+                )}
+                <div className="atlas-network-area" aria-busy={busy}>
+                  <div className="atlas-view-caption">
+                    <span>
+                      {audience === "societies"
+                        ? "Recommended communities"
+                        : activeInterest
+                          ? activeInterest.label
+                          : "All your interests"}
+                    </span>
+                    <strong>
+                      {busy
+                        ? "Finding connections…"
+                        : `${atlasPeople.length} of ${shownTotal} ${audience === "societies" ? "communities" : "people"}`}
+                    </strong>
+                  </div>
+                  <div className="atlas-stage">
+                    {viewError ? (
+                      <div className="atlas-inline-state" role="alert">
+                        <p>We couldn’t load these connections.</p>
+                        <button className="text-link" onClick={load}>
+                          Try again <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    ) : busy ? (
+                      <div className="atlas-inline-state" role="status">
+                        <span className="loading-orbit" />
+                        <p>Finding your common ground…</p>
+                      </div>
+                    ) : atlasPeople.length === 0 ? (
+                      <div className="atlas-inline-state">
+                        <Users size={24} />
+                        <p>No shared-interest matches here yet.</p>
+                        <button
+                          className="text-link"
+                          onClick={() => changeInterest(null)}
+                        >
+                          Explore all interests <ArrowRight size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <Suspense
+                        fallback={
+                          <div className="atlas-fallback-loading">
+                            Opening your connections…
+                          </div>
+                        }
+                      >
+                        <NetworkAtlas
+                          people={atlasPeople}
+                          selectedId={selected?.actor.id ?? null}
+                          onSelect={setSelectedId}
+                          activeGroup={
+                            audience === "societies" || activeGroup < 0
+                              ? null
+                              : activeGroup
+                          }
+                          still={still}
+                          zoom={zoom}
+                        />
+                      </Suspense>
+                    )}
+                  </div>
+                  <p className="atlas-depth-note">
+                    Closer names come into focus. Drag to see who’s behind.
+                  </p>
+                </div>
               </div>
               <div className="atlas-footer">
                 <span>
-                  <span className="drag-icon">⌘</span> Drag to explore · Click
-                  to connect
+                  <span className="drag-icon">⌘</span> Each node is a{" "}
+                  {audience === "societies" ? "community" : "person"} · Lines
+                  are shared interests
                 </span>
                 <div className="atlas-controls">
                   <button
@@ -465,7 +623,7 @@ export function Home() {
               aria-label="Selected connection"
               aria-live="polite"
             >
-              {selected ? (
+              {selected && !busy && !viewError ? (
                 <>
                   <div className="spotlight-eyebrow">
                     <Sparkles size={14} />
@@ -476,7 +634,9 @@ export function Home() {
                       <Avatar
                         name={selected.actor.displayName}
                         size="lg"
-                        index={people.indexOf(selected)}
+                        index={people.findIndex(
+                          (p) => p.actor.id === selected.actor.id,
+                        )}
                       />
                       <span className="profile-spark">
                         <Sparkles size={12} />
@@ -491,9 +651,8 @@ export function Home() {
                   </div>
                   <div className="shared-pill">
                     <span className="overlap-circles" />
-                    {selected.reasons.filter((r) => r.kind === "shared_concept")
-                      .length > 0
-                      ? `${selected.reasons.filter((r) => r.kind === "shared_concept").length} shared ${selected.reasons.filter((r) => r.kind === "shared_concept").length === 1 ? "interest" : "interests"}`
+                    {selectedSharedCount > 0
+                      ? `${selectedSharedCount} shared ${selectedSharedCount === 1 ? "interest" : "interests"}`
                       : "Shared campus context"}
                   </div>
                   <div className="why-connect">
@@ -529,8 +688,18 @@ export function Home() {
               ) : (
                 <div className="empty-state">
                   <Users size={28} />
-                  <h3>Make room for new connections.</h3>
-                  <p>No matches for this interest yet.</p>
+                  <h3>
+                    {busy
+                      ? "A new perspective is on its way."
+                      : "Make room for new connections."}
+                  </h3>
+                  <p>
+                    {busy
+                      ? "Finding your common ground…"
+                      : viewError
+                        ? "Retry to load these connections."
+                        : "No matches here yet."}
+                  </p>
                   <button
                     className="text-link"
                     onClick={() => changeInterest(null)}
@@ -542,7 +711,7 @@ export function Home() {
             </aside>
           </div>
         )}
-        {audience !== "events" && (
+        {audience === "people" && (
           <div className="interest-filters">
             <span>Explore by interest</span>
             <button
@@ -552,7 +721,7 @@ export function Home() {
             >
               All interests
             </button>
-            {interests.slice(0, 4).map((c, i) => (
+            {interests.slice(0, 5).map((c, i) => (
               <button
                 key={c.conceptId}
                 className={interest === c.conceptId ? "active" : ""}
@@ -578,7 +747,9 @@ export function Home() {
                   : "A few people you should meet"}
               </h2>
               <p>
-                Shared interests. Fresh perspectives. Something worth starting.
+                {audience === "people" && activeInterest
+                  ? `People who share your interest in ${activeInterest.label}.`
+                  : "Shared interests. Fresh perspectives. Something worth starting."}
               </p>
             </div>
             <button
@@ -592,48 +763,51 @@ export function Home() {
             </button>
           </div>
           <div className="person-cards">
-            {cards.map((s, i) => (
-              <article className="connection-card" key={s.actor.id}>
-                <div className="connection-card-top">
-                  <Avatar name={s.actor.displayName} index={i + 1} />
-                  <button
-                    className={`icon-button bookmark-button ${saved.includes(s.actor.id) ? "is-saved" : ""}`}
-                    aria-label={`${saved.includes(s.actor.id) ? "Unsave" : "Save"} ${s.actor.displayName}`}
-                    aria-pressed={saved.includes(s.actor.id)}
-                    onClick={() => toggleSaved(s.actor.id)}
-                  >
-                    <Bookmark
-                      size={17}
-                      fill={
-                        saved.includes(s.actor.id) ? "currentColor" : "none"
-                      }
-                    />
-                  </button>
-                </div>
-                <h3>{s.actor.displayName}</h3>
-                <p className="person-meta">
-                  {s.actor.homeUnit?.name ?? "Campus community"} ·{" "}
-                  {s.actor.personKind ?? s.actor.kind}
-                </p>
-                <p className="connection-reason">
-                  <span className="small-link-mark">↗</span>
-                  {s.reasons[0]?.summary ?? "A new perspective in your network"}
-                </p>
-                <div className="connection-card-bottom">
-                  <span className="person-interest">
-                    {s.actor.topConcepts[0]?.label ?? "New connection"}
-                  </span>
-                  <button
-                    aria-label={`Meet ${s.actor.displayName}`}
-                    onClick={() => setDetail(s)}
-                  >
-                    <ArrowUpRight size={18} />
-                  </button>
-                </div>
-              </article>
-            ))}
+            {!busy &&
+              !viewError &&
+              cards.map((s, i) => (
+                <article className="connection-card" key={s.actor.id}>
+                  <div className="connection-card-top">
+                    <Avatar name={s.actor.displayName} index={i + 1} />
+                    <button
+                      className={`icon-button bookmark-button ${saved.includes(s.actor.id) ? "is-saved" : ""}`}
+                      aria-label={`${saved.includes(s.actor.id) ? "Unsave" : "Save"} ${s.actor.displayName}`}
+                      aria-pressed={saved.includes(s.actor.id)}
+                      onClick={() => toggleSaved(s.actor.id)}
+                    >
+                      <Bookmark
+                        size={17}
+                        fill={
+                          saved.includes(s.actor.id) ? "currentColor" : "none"
+                        }
+                      />
+                    </button>
+                  </div>
+                  <h3>{s.actor.displayName}</h3>
+                  <p className="person-meta">
+                    {s.actor.homeUnit?.name ?? "Campus community"} ·{" "}
+                    {s.actor.personKind ?? s.actor.kind}
+                  </p>
+                  <p className="connection-reason">
+                    <span className="small-link-mark">↗</span>
+                    {s.reasons[0]?.summary ??
+                      "A new perspective in your network"}
+                  </p>
+                  <div className="connection-card-bottom">
+                    <span className="person-interest">
+                      {s.actor.topConcepts[0]?.label ?? "New connection"}
+                    </span>
+                    <button
+                      aria-label={`Meet ${s.actor.displayName}`}
+                      onClick={() => setDetail(s)}
+                    >
+                      <ArrowUpRight size={18} />
+                    </button>
+                  </div>
+                </article>
+              ))}
           </div>
-          {cards.length === 0 && !loading && (
+          {cards.length === 0 && !busy && (
             <div className="empty-state">
               <Bookmark size={24} />
               <h3>

@@ -2226,3 +2226,217 @@ h3 {
     font-size: 12px;
   }
 }
+/* Interest-led atlas: a tangible key, and a small network of real matches. */
+.atlas-panel {
+  min-height: 475px;
+}
+.atlas-explorer {
+  position: absolute;
+  inset: 82px 0 52px;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  align-items: stretch;
+}
+.interest-globe-rail {
+  min-width: 0;
+  position: relative;
+  border-right: 1px solid #ceddca;
+  margin: 0 0 6px 12px;
+  padding-right: 8px;
+}
+.atlas-network-area {
+  position: relative;
+  min-width: 0;
+}
+.atlas-network-area .atlas-stage {
+  inset: 29px 0 24px;
+}
+.atlas-view-caption {
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  z-index: 5;
+  font-size: 10px;
+  color: #7c9272;
+  text-transform: capitalize;
+  pointer-events: none;
+}
+.atlas-view-caption strong {
+  color: #53794c;
+  font-size: 9px;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+.atlas-depth-note {
+  position: absolute;
+  bottom: 0;
+  left: 14px;
+  right: 14px;
+  font-size: 9px;
+  color: #78916f;
+  text-align: center;
+}
+.atlas-inline-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #739069;
+  font-size: 12px;
+  text-align: center;
+  padding: 24px;
+}
+.atlas-inline-state .loading-orbit {
+  width: 28px;
+  height: 28px;
+}
+.network-expanded .atlas-explorer {
+  grid-template-columns: 245px minmax(0, 1fr);
+}
+.network-expanded .interest-globe-rail {
+  display: flex;
+  align-items: center;
+}
+.network-expanded .interest-globe-rail > * {
+  width: 100%;
+}
+@media (min-width: 1550px) {
+  .atlas-panel {
+    min-height: 500px;
+  }
+  .atlas-explorer {
+    grid-template-columns: 230px minmax(0, 1fr);
+  }
+}
+@media (max-width: 1190px) and (min-width: 981px) {
+  .network-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .connection-spotlight {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 25px;
+    align-items: center;
+    padding: 20px;
+  }
+  .spotlight-eyebrow {
+    grid-column: 1/-1;
+  }
+  .spotlight-profile {
+    grid-row: 2/5;
+    margin-top: 0;
+  }
+  .shared-pill {
+    margin: 0;
+    width: fit-content;
+  }
+  .why-connect {
+    margin: 0;
+    padding-top: 10px;
+  }
+  .spotlight-tags {
+    margin: 0;
+  }
+  .spotlight-action {
+    grid-column: 2;
+    margin: 0;
+  }
+  .spotlight-footnote {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  .atlas-panel {
+    min-height: 720px;
+  }
+  .atlas-explorer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 275px minmax(0, 1fr);
+    inset: 74px 0 56px;
+  }
+  .interest-globe-rail {
+    border-right: 0;
+    border-bottom: 1px solid #ceddca;
+    margin: 0 18px;
+    padding: 0 0 6px;
+  }
+  .atlas-network-area {
+    margin-top: 15px;
+  }
+  .atlas-view-caption {
+    left: 17px;
+    right: 17px;
+  }
+  .atlas-view-caption strong {
+    font-size: 9px;
+  }
+  .atlas-footer > span {
+    max-width: 155px;
+    font-size: 9px;
+  }
+  .atlas-heading h3 {
+    max-width: 260px;
+  }
+  .atlas-depth-note {
+    font-size: 9px;
+  }
+  .network-expanded .atlas-explorer {
+    grid-template-columns: 150px minmax(0, 1fr);
+    grid-template-rows: 1fr;
+  }
+  .network-expanded .atlas-panel {
+    min-height: 0;
+  }
+  .network-expanded .interest-globe-rail {
+    margin: 0;
+    border-bottom: 0;
+    border-right: 1px solid #ceddca;
+  }
+  .network-expanded .atlas-view-caption {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .network-expanded .atlas-network-area {
+    margin-top: 0;
+  }
+  .network-expanded .atlas-network-area .atlas-stage {
+    top: 45px;
+  }
+}
+.atlas-explorer.atlas-explorer-communities {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+@media (max-width: 720px) {
+  .network-expanded .atlas-explorer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 240px minmax(0, 1fr);
+  }
+  .network-expanded .interest-globe-rail {
+    margin: 0 14px;
+    border-right: 0;
+    border-bottom: 1px solid #ceddca;
+  }
+  .network-expanded .atlas-network-area {
+    margin-top: 15px;
+  }
+  .network-expanded .atlas-view-caption {
+    flex-direction: row;
+    align-items: center;
+  }
+  .network-expanded .atlas-network-area .atlas-stage {
+    top: 29px;
+  }
+  .network-expanded .atlas-explorer-communities {
+    grid-template-rows: minmax(0, 1fr);
+  }
+}
