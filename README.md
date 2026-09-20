@@ -1,5 +1,7 @@
 # Link — your campus, connected
 
+**[Open the live demo](https://link-campus.vercel.app/)** · [GitHub repository](https://github.com/laithm/link-campus)
+
 A campus discovery app that connects people through shared interests and explains why each match matters. This frontend remake adds an interactive Three.js campus atlas, a responsive workspace, searchable connections, locally saved profiles, and a complete preview introduction flow.
 
 Based on [Prashant-koi/link](https://github.com/Prashant-koi/link). The backend and its API contracts are retained.
